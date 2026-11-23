@@ -21,7 +21,7 @@ import androidx.camera.core.ImageProxy
  * Emits Annex-B NAL units via [onNal] (bytes, isKeyframe, presentationTimeUs); SPS/PPS prepended
  * to keyframes.
  */
-class H264HardwareEncoder(
+class VideoHardwareEncoder(
     val width: Int,
     val height: Int,
     frameRate: Int,
@@ -29,9 +29,11 @@ class H264HardwareEncoder(
     val useSurface: Boolean,
     /** Seconds between keyframes. Longer saves bandwidth; new viewers wait up to this long. */
     keyFrameIntervalSec: Int = 1,
+    val useHevc: Boolean = false,
     private val onNal: (ByteArray, Boolean, Long) -> Unit
 ) {
-    private val codec: MediaCodec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
+    private val mimeType = if (useHevc) MediaFormat.MIMETYPE_VIDEO_HEVC else MediaFormat.MIMETYPE_VIDEO_AVC
+    private val codec: MediaCodec = MediaCodec.createEncoderByType(mimeType)
     private val codecLock = Any()
     private val mainHandler = Handler(Looper.getMainLooper())
     @Volatile private var codecReleased = false
@@ -41,6 +43,7 @@ class H264HardwareEncoder(
     private var thread: Thread? = null
     private var semiPlanar = true   // byte-buffer layout: NV12 (interleaved UV) vs I420 (planar U then V)
     private val parameterSets = H264ParameterSetCache()
+    private val hevcParameterSets = HevcParameterSetCache()
     private val accessUnitAssembler = H264AccessUnitAssembler()
     private var partialFlags = 0
     private var frameCount = 0
@@ -59,7 +62,7 @@ class H264HardwareEncoder(
     init {
         val colorFormat = if (useSurface) MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface
                           else pickYuvFormat()   // sets semiPlanar; NV12 if the HW takes it, else I420
-        val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height).apply {
+        val format = MediaFormat.createVideoFormat(mimeType, width, height).apply {
             setInteger(MediaFormat.KEY_COLOR_FORMAT, colorFormat)
             setInteger(MediaFormat.KEY_BIT_RATE, bitRate)
             setInteger(MediaFormat.KEY_FRAME_RATE, frameRate)
@@ -77,7 +80,7 @@ class H264HardwareEncoder(
             throw e
         }
         thread = Thread { drainLoop() }.apply { isDaemon = true; start() }
-        Log.i(TAG, "H264HardwareEncoder started ${width}x$height @${frameRate}fps ${bitRate / 1000}kbps surface=$useSurface")
+        Log.i(TAG, "VideoHardwareEncoder started (${if (useHevc) "HEVC" else "AVC"}) ${width}x$height @${frameRate}fps ${bitRate / 1000}kbps surface=$useSurface")
     }
 
     fun requestKeyFrame() {
@@ -86,9 +89,9 @@ class H264HardwareEncoder(
 
     fun updateBitrate(bps: Int) {
         try {
-            val clamped = clampBitrate(bps.toLong())
+            val clamped = clampBitrate(bps.toLong(), useHevc)
             codec.setParameters(Bundle().apply { putInt(MediaCodec.PARAMETER_KEY_VIDEO_BITRATE, clamped) })
-            Log.i(TAG, "Updated H264 bitrate to ${clamped / 1000}kbps")
+            Log.i(TAG, "Updated ${if (useHevc) "H265" else "H264"} bitrate to ${clamped / 1000}kbps")
         } catch (e: Exception) {
             Log.w(TAG, "updateBitrate failed: ${e.message}")
         }
@@ -96,7 +99,7 @@ class H264HardwareEncoder(
 
     /** ponytail: NV12 vs I420 is the classic cross-device MediaCodec gotcha — ask the codec which it takes. */
     private fun pickYuvFormat(): Int {
-        val supported = try { codec.codecInfo.getCapabilitiesForType(MediaFormat.MIMETYPE_VIDEO_AVC).colorFormats.toSet() }
+        val supported = try { codec.codecInfo.getCapabilitiesForType(mimeType).colorFormats.toSet() }
                         catch (_: Exception) { emptySet<Int>() }
         return when {
             supported.contains(MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Planar) && !supported.contains(MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420SemiPlanar) ->
@@ -593,10 +596,12 @@ class H264HardwareEncoder(
                             if (accessUnit != null) {
                                 val flags = partialFlags
                                 partialFlags = 0
-                                prepared = parameterSets.prepare(
-                                    accessUnit,
-                                    (flags and MediaCodec.BUFFER_FLAG_KEY_FRAME) != 0
-                                )
+                                val isKey = (flags and MediaCodec.BUFFER_FLAG_KEY_FRAME) != 0
+                                prepared = if (useHevc) {
+                                    hevcParameterSets.prepare(accessUnit, isKey)
+                                } else {
+                                    parameterSets.prepare(accessUnit, isKey)
+                                }
                             }
                         }
                     } finally {
@@ -615,18 +620,20 @@ class H264HardwareEncoder(
     }
 
     private fun cacheCodecSpecificData(format: MediaFormat) {
-        for (key in arrayOf("csd-0", "csd-1")) {
+        for (key in arrayOf("csd-0", "csd-1", "csd-2")) {
             try {
                 val source = format.getByteBuffer(key)?.duplicate() ?: continue
                 val data = ByteArray(source.remaining())
                 source.get(data)
-                parameterSets.prepare(data, false)
+                if (useHevc) hevcParameterSets.prepare(data, false)
+                else parameterSets.prepare(data, false)
             } catch (e: Exception) {
                 Log.w(TAG, "Unable to read $key: ${e.message}")
             }
         }
-        if (!parameterSets.hasCompleteParameters()) {
-            Log.w(TAG, "Output format did not contain complete AVC SPS/PPS")
+        val complete = if (useHevc) hevcParameterSets.hasCompleteParameters() else parameterSets.hasCompleteParameters()
+        if (!complete) {
+            Log.w(TAG, "Output format did not contain complete ${if (useHevc) "HEVC VPS/SPS/PPS" else "AVC SPS/PPS"}")
         }
     }
 
@@ -676,48 +683,66 @@ class H264HardwareEncoder(
             try { inputSurface?.release() } catch (_: Exception) {}
             accessUnitAssembler.reset()
             partialFlags = 0
-            Log.i(TAG, "H264HardwareEncoder resources actually released for: $this")
+            Log.i(TAG, "VideoHardwareEncoder resources actually released for: $this")
         }
     }
 
     companion object {
-        private const val TAG = "H264HardwareEncoder"
+        private const val TAG = "VideoHardwareEncoder"
 
         /** Cached AVC encoder capabilities, queried once. Makes sizing/bitrate device-agnostic. */
         data class Caps(val maxW: Int, val maxH: Int, val minBitrate: Int, val maxBitrate: Int)
 
         @Volatile private var cachedCaps: Caps? = null
+        @Volatile private var cachedHevcCaps: Caps? = null
+        @Volatile private var cachedHevcSupported: Boolean? = null
 
-        /** Query the device's AVC hardware encoder for its real limits (cached). */
-        fun caps(): Caps {
-            cachedCaps?.let { return it }
+        /** Returns true if the device exposes a hardware/regular HEVC (H.265) encoder. */
+        fun isHevcSupported(): Boolean {
+            cachedHevcSupported?.let { return it }
+            val supported = try {
+                MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos.any {
+                    it.isEncoder && it.supportedTypes.any { t -> t.equals(MediaFormat.MIMETYPE_VIDEO_HEVC, true) }
+                }
+            } catch (_: Exception) {
+                false
+            }
+            cachedHevcSupported = supported
+            return supported
+        }
+
+        /** Query the device's AVC or HEVC encoder for its real limits (cached). */
+        fun caps(useHevc: Boolean = false): Caps {
+            if (!useHevc) cachedCaps?.let { return it }
+            else cachedHevcCaps?.let { return it }
+
+            val mime = if (useHevc) MediaFormat.MIMETYPE_VIDEO_HEVC else MediaFormat.MIMETYPE_VIDEO_AVC
             val fallback = Caps(1920, 1080, 100_000, 20_000_000)
             val found = try {
                 MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos.asSequence()
-                    .filter { it.isEncoder && it.supportedTypes.any { t -> t.equals(MediaFormat.MIMETYPE_VIDEO_AVC, true) } }
-                    .mapNotNull { it.getCapabilitiesForType(MediaFormat.MIMETYPE_VIDEO_AVC).videoCapabilities }
+                    .filter { it.isEncoder && it.supportedTypes.any { t -> t.equals(mime, true) } }
+                    .mapNotNull { it.getCapabilitiesForType(mime).videoCapabilities }
                     .map {
                         Caps(it.supportedWidths.upper, it.supportedHeights.upper,
                              it.bitrateRange.lower, it.bitrateRange.upper)
                     }
-                    // Prefer the encoder advertising the largest frame so we don't undercut HW.
                     .maxByOrNull { it.maxW.toLong() * it.maxH }
-            } catch (e: Exception) { Log.w(TAG, "caps query failed: ${e.message}"); null }
+            } catch (e: Exception) { Log.w(TAG, "caps($mime) query failed: ${e.message}"); null }
             val c = found ?: fallback
-            cachedCaps = c
-            Log.i(TAG, "AVC encoder caps ${c.maxW}x${c.maxH} bitrate ${c.minBitrate}..${c.maxBitrate}")
+            if (!useHevc) cachedCaps = c else cachedHevcCaps = c
+            Log.i(TAG, "$mime encoder caps ${c.maxW}x${c.maxH} bitrate ${c.minBitrate}..${c.maxBitrate}")
             return c
         }
 
         /**
-         * Target ~0.2 bits/pixel/frame at 30fps (w*h*6) — enough to avoid visible H.264 macroblocking
-         * (the old w*h*3 ≈ 0.1 bpp looked "compressed" at 1440x1080). Clamped to the device's range.
+         * Target ~0.2 bits/pixel/frame at 30fps (w*h*6) for H.264, or ~0.13 bpp (w*h*4) for HEVC.
          */
-        fun bitrateFor(w: Int, h: Int): Int = clampBitrate(w.toLong() * h * 6)
+        fun bitrateFor(w: Int, h: Int, useHevc: Boolean = false): Int =
+            clampBitrate(w.toLong() * h * (if (useHevc) 4 else 6), useHevc)
 
         /** [bitsPerSecond] within the device encoder's supported range. */
-        fun clampBitrate(bitsPerSecond: Long): Int {
-            val c = caps()
+        fun clampBitrate(bitsPerSecond: Long, useHevc: Boolean = false): Int {
+            val c = caps(useHevc)
             return bitsPerSecond.coerceIn(c.minBitrate.toLong(), c.maxBitrate.toLong()).toInt()
         }
     }

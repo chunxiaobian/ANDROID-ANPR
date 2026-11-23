@@ -93,7 +93,7 @@ internal object H264Bitstream {
         return ranges.takeIf { it.isNotEmpty() }
     }
 
-    private fun findStartCode(input: ByteArray, from: Int): Pair<Int, Int>? {
+    internal fun findStartCode(input: ByteArray, from: Int): Pair<Int, Int>? {
         var i = from.coerceAtLeast(0)
         while (i + 2 < input.size) {
             if (input[i].toInt() == 0 && input[i + 1].toInt() == 0) {

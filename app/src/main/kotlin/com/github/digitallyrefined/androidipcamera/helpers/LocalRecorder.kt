@@ -51,6 +51,7 @@ class LocalRecorder(
         private set
     @Volatile var currentFileName: String? = null
         private set
+    @Volatile var useHevc: Boolean = false
 
     // --- Muxer state (guarded by muxerLock) ---
     private val muxerLock = Any()
@@ -216,29 +217,49 @@ class LocalRecorder(
      * Returns true if track was successfully initialized, false if SPS/PPS missing.
      */
     private fun initTrack(annexB: ByteArray): Boolean {
-        val ranges = H264Bitstream.nalRanges(annexB)
-        val spsRange = ranges.firstOrNull { it.type == 7 }
-        val ppsRange = ranges.firstOrNull { it.type == 8 }
+        val format: MediaFormat
+        if (useHevc) {
+            val ranges = HevcBitstream.nalRanges(annexB)
+            val vpsRange = ranges.firstOrNull { it.type == HevcBitstream.NAL_VPS }
+            val spsRange = ranges.firstOrNull { it.type == HevcBitstream.NAL_SPS }
+            val ppsRange = ranges.firstOrNull { it.type == HevcBitstream.NAL_PPS }
+            if (vpsRange == null || spsRange == null || ppsRange == null) {
+                Log.w(TAG, "HEVC keyframe missing VPS/SPS/PPS (VPS=${vpsRange != null}, SPS=${spsRange != null}, PPS=${ppsRange != null}); waiting")
+                return false
+            }
+            format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_HEVC, width, height)
+            val csd0 = ByteArrayOutputStream().apply {
+                write(annexB, vpsRange.startCodeStart, vpsRange.end - vpsRange.startCodeStart)
+                write(annexB, spsRange.startCodeStart, spsRange.end - spsRange.startCodeStart)
+                write(annexB, ppsRange.startCodeStart, ppsRange.end - ppsRange.startCodeStart)
+            }.toByteArray()
+            format.setByteBuffer("csd-0", ByteBuffer.wrap(csd0))
+            Log.i(TAG, "HEVC Muxer track added: ${width}x${height}, csd-0=${csd0.size}B")
+        } else {
+            val ranges = H264Bitstream.nalRanges(annexB)
+            val spsRange = ranges.firstOrNull { it.type == 7 }
+            val ppsRange = ranges.firstOrNull { it.type == 8 }
 
-        if (spsRange == null || ppsRange == null) {
-            Log.w(TAG, "Keyframe missing SPS or PPS (SPS=${spsRange != null}, PPS=${ppsRange != null}); waiting for next keyframe")
-            return false
+            if (spsRange == null || ppsRange == null) {
+                Log.w(TAG, "Keyframe missing SPS or PPS (SPS=${spsRange != null}, PPS=${ppsRange != null}); waiting for next keyframe")
+                return false
+            }
+
+            format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height)
+
+            // csd-0 (SPS) and csd-1 (PPS) include their Annex-B start codes
+            val spsBytes = annexB.copyOfRange(spsRange.startCodeStart, spsRange.end)
+            format.setByteBuffer("csd-0", ByteBuffer.wrap(spsBytes))
+
+            val ppsBytes = annexB.copyOfRange(ppsRange.startCodeStart, ppsRange.end)
+            format.setByteBuffer("csd-1", ByteBuffer.wrap(ppsBytes))
+            Log.i(TAG, "AVC Muxer track added: ${width}x${height}, SPS=${spsBytes.size}B, PPS=${ppsBytes.size}B")
         }
-
-        val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height)
-
-        // csd-0 (SPS) and csd-1 (PPS) include their Annex-B start codes
-        val spsBytes = annexB.copyOfRange(spsRange.startCodeStart, spsRange.end)
-        format.setByteBuffer("csd-0", ByteBuffer.wrap(spsBytes))
-
-        val ppsBytes = annexB.copyOfRange(ppsRange.startCodeStart, ppsRange.end)
-        format.setByteBuffer("csd-1", ByteBuffer.wrap(ppsBytes))
 
         val m = muxer ?: return false
         trackIndex = m.addTrack(format)
         m.start()
         muxerStarted = true
-        Log.i(TAG, "Muxer track added: ${width}x${height}, SPS=${spsBytes.size}B, PPS=${ppsBytes.size}B")
         return true
     }
 
@@ -288,9 +309,12 @@ class LocalRecorder(
      * MediaMuxer handles the Annex-B → AVCC conversion internally when writing MP4.
      */
     private fun stripNonVclNals(annexB: ByteArray): ByteArray {
-        val ranges = H264Bitstream.nalRanges(annexB)
-        // Keep only VCL slices (1–5) and SEI (6)
-        val vclRanges = ranges.filter { it.type in 1..6 }
+        val ranges = if (useHevc) HevcBitstream.nalRanges(annexB) else H264Bitstream.nalRanges(annexB)
+        val vclRanges = if (useHevc) {
+            ranges.filter { HevcBitstream.isVcl(it.type) || it.type == HevcBitstream.NAL_PREFIX_SEI || it.type == HevcBitstream.NAL_SUFFIX_SEI }
+        } else {
+            ranges.filter { it.type in 1..6 }
+        }
         if (vclRanges.isEmpty()) return ByteArray(0)
 
         // If all NALs are VCL, return the input as-is (common fast path)

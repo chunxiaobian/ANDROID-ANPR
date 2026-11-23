@@ -321,15 +321,36 @@ internal object RtspSdp {
     const val AUDIO_PAYLOAD_TYPE = 97
     const val VIDEO_CLOCK_RATE = 90_000
 
-    fun build(originAddress: String, sessionId: Long, sps: ByteArray?, pps: ByteArray?, audio: AacFormat?): String {
+    fun build(
+        originAddress: String,
+        sessionId: Long,
+        sps: ByteArray?,
+        pps: ByteArray?,
+        audio: AacFormat?,
+        vps: ByteArray? = null,
+        useHevc: Boolean = false
+    ): String {
         val addressType = if (originAddress.contains(':')) "IP6" else "IP4"
-        val fmtp = StringBuilder("packetization-mode=1")
-        if (sps != null && sps.size >= 4) {
-            // profile_idc, constraint flags and level_idc straight from the SPS.
-            fmtp.append(";profile-level-id=").append(hex(sps.copyOfRange(1, 4)))
-        }
-        if (sps != null && pps != null) {
-            fmtp.append(";sprop-parameter-sets=").append(RtspBase64.encode(sps)).append(',').append(RtspBase64.encode(pps))
+        val videoRtpmap: String
+        val videoFmtp: String
+        if (useHevc) {
+            videoRtpmap = "a=rtpmap:$VIDEO_PAYLOAD_TYPE H265/$VIDEO_CLOCK_RATE"
+            val parts = mutableListOf<String>()
+            if (vps != null) parts += "sprop-vps=${RtspBase64.encode(vps)}"
+            if (sps != null) parts += "sprop-sps=${RtspBase64.encode(sps)}"
+            if (pps != null) parts += "sprop-pps=${RtspBase64.encode(pps)}"
+            videoFmtp = if (parts.isNotEmpty()) "a=fmtp:$VIDEO_PAYLOAD_TYPE ${parts.joinToString(";")}" else ""
+        } else {
+            val fmtp = StringBuilder("packetization-mode=1")
+            if (sps != null && sps.size >= 4) {
+                // profile_idc, constraint flags and level_idc straight from the SPS.
+                fmtp.append(";profile-level-id=").append(hex(sps.copyOfRange(1, 4)))
+            }
+            if (sps != null && pps != null) {
+                fmtp.append(";sprop-parameter-sets=").append(RtspBase64.encode(sps)).append(',').append(RtspBase64.encode(pps))
+            }
+            videoRtpmap = "a=rtpmap:$VIDEO_PAYLOAD_TYPE H264/$VIDEO_CLOCK_RATE"
+            videoFmtp = "a=fmtp:$VIDEO_PAYLOAD_TYPE $fmtp"
         }
         val lines = mutableListOf(
             "v=0",
@@ -341,10 +362,10 @@ internal object RtspSdp {
             "a=range:npt=0-",
             "a=control:*",
             "m=video 0 RTP/AVP $VIDEO_PAYLOAD_TYPE",
-            "a=rtpmap:$VIDEO_PAYLOAD_TYPE H264/$VIDEO_CLOCK_RATE",
-            "a=fmtp:$VIDEO_PAYLOAD_TYPE $fmtp",
-            "a=control:trackID=$VIDEO_TRACK"
+            videoRtpmap
         )
+        if (videoFmtp.isNotEmpty()) lines += videoFmtp
+        lines += "a=control:trackID=$VIDEO_TRACK"
         if (audio != null) {
             lines += "m=audio 0 RTP/AVP $AUDIO_PAYLOAD_TYPE"
             lines += "a=rtpmap:$AUDIO_PAYLOAD_TYPE MPEG4-GENERIC/${audio.sampleRate}/${audio.channels}"

@@ -16,16 +16,16 @@ import java.util.concurrent.atomic.AtomicLong
  * H.264 streaming encoder implementation.
  * Handles H.264 encoding and broadcasting to H.264 clients.
  */
-class H264StreamingEncoder(
+class VideoStreamingEncoder(
     private val context: Context,
     private var streamingServerHelper: StreamingServerHelper?,
     private val onLog: (String) -> Unit = {}
 ) : StreamingEncoder {
     companion object {
-        private const val TAG = "H264StreamingEncoder"
+        private const val TAG = "VideoStreamingEncoder"
     }
 
-    var h264HardwareEncoder: H264HardwareEncoder? = null
+    var videoHardwareEncoder: VideoHardwareEncoder? = null
         private set
     /** RTSP server sharing this encoder's output, when RTSP is enabled. */
     @Volatile internal var rtspServer: RtspServer? = null
@@ -34,7 +34,7 @@ class H264StreamingEncoder(
      * running, or none possible on this capture path) sub stream viewers get this encoder's frames.
      */
     @Volatile internal var subStreamEncoded = false
-    private val releasingEncoders = java.util.concurrent.CopyOnWriteArrayList<H264HardwareEncoder>()
+    private val releasingEncoders = java.util.concurrent.CopyOnWriteArrayList<VideoHardwareEncoder>()
     private var glPipe: CameraGlPipe? = null
     private var backend: CaptureBackend? = null
     private var captureRunning = false
@@ -50,7 +50,7 @@ class H264StreamingEncoder(
     ).apply { allowCoreThreadTimeOut(true) }
 
     override fun processFrame(image: ImageProxy) {
-        val enc = h264HardwareEncoder
+        val enc = videoHardwareEncoder
         if (enc != null && enc.useSurface) {
             // Already running in surface mode, camera renders directly to it.
             return
@@ -69,25 +69,27 @@ class H264StreamingEncoder(
             val swap = rotation == 90 || rotation == 270
             val outW = if (swap) image.height else image.width
             val outH = if (swap) image.width else image.height
-            if (encMutable == null || encMutable.width != outW || encMutable.height != outH) {
+            val useHevc = prefs.getString("video_codec", "h264") == "h265" && VideoHardwareEncoder.isHevcSupported()
+            if (encMutable == null || encMutable.width != outW || encMutable.height != outH || encMutable.useHevc != useHevc) {
                 invalidatePendingWrites()
                 encMutable?.stop()
                 val fps = prefs.getString("stream_fps", "30")?.toIntOrNull() ?: 30
                 val fpsCoerced = fps.coerceIn(1, 60)
                 val customBitrateKbps = prefs.getInt("stream_bitrate_kbps", 0)
                 val targetBitrate = if (customBitrateKbps > 0) {
-                    H264HardwareEncoder.clampBitrate(customBitrateKbps * 1000L)
+                    VideoHardwareEncoder.clampBitrate(customBitrateKbps * 1000L, useHevc)
                 } else {
-                    H264HardwareEncoder.bitrateFor(outW, outH)
+                    VideoHardwareEncoder.bitrateFor(outW, outH, useHevc)
                 }
-                encMutable = H264HardwareEncoder(
+                encMutable = VideoHardwareEncoder(
                     outW,
                     outH,
                     fpsCoerced,
                     targetBitrate,
-                    false
+                    false,
+                    useHevc = useHevc
                 ) { d, k, pts -> broadcastH264(d, k, pts) }
-                h264HardwareEncoder = encMutable
+                videoHardwareEncoder = encMutable
                 encMutable.requestKeyFrame()
                 streamingServerHelper?.resetH264Wait()
             }
@@ -103,8 +105,8 @@ class H264StreamingEncoder(
         } catch (e: OutOfMemoryError) {
             Log.e(TAG, "processFrame OOM: ${e.message}")
             invalidatePendingWrites()
-            h264HardwareEncoder?.stop()
-            h264HardwareEncoder = null
+            videoHardwareEncoder?.stop()
+            videoHardwareEncoder = null
             DeviceMemoryHelper.updateMemoryPressure(android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL)
             try { System.gc() } catch (_: Exception) {}
         } catch (e: Exception) {
@@ -139,13 +141,13 @@ class H264StreamingEncoder(
         backend = null
         glPipe?.stop()
         glPipe = null
-        h264HardwareEncoder?.let { enc ->
+        videoHardwareEncoder?.let { enc ->
             enc.stop()
             if (enc.useSurface && enc.hasSurfaceBeenProvided && !enc.isReleased) {
                 releasingEncoders.add(enc)
             }
         }
-        h264HardwareEncoder = null
+        videoHardwareEncoder = null
         invalidatePendingWrites()
         captureRunning = false
     }
@@ -260,15 +262,15 @@ class H264StreamingEncoder(
     /**
      * Set the H.264 hardware encoder (used by Camera1 backend).
      */
-    fun setEncoder(encoder: H264HardwareEncoder?) {
+    fun setEncoder(encoder: VideoHardwareEncoder?) {
         invalidatePendingWrites()
-        h264HardwareEncoder?.let { old ->
+        videoHardwareEncoder?.let { old ->
             old.stop()
             if (old.useSurface && old.hasSurfaceBeenProvided && !old.isReleased) {
                 releasingEncoders.add(old)
             }
         }
-        h264HardwareEncoder = encoder
+        videoHardwareEncoder = encoder
     }
 
     private fun invalidatePendingWrites() {

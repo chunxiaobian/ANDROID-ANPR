@@ -82,6 +82,45 @@ internal object H264RtpPacketizer {
     }
 }
 
+/** H.265 / HEVC over RTP (RFC 7798): single NAL unit packets plus FU (type 49) fragments. */
+internal object HevcRtpPacketizer {
+    private const val NAL_AUD = 35
+    private const val NAL_FU = 49
+
+    fun payloads(accessUnit: ByteArray, maxPayload: Int = RTP_MAX_PAYLOAD): List<ByteArray> {
+        val payloads = ArrayList<ByteArray>()
+        for (range in HevcBitstream.nalRanges(accessUnit)) {
+            if (range.type == NAL_AUD) continue
+            val size = range.end - range.start
+            if (size <= maxPayload) {
+                payloads += accessUnit.copyOfRange(range.start, range.end)
+                continue
+            }
+            if (size < 3) continue
+            val b0 = accessUnit[range.start].toInt() and 0xff
+            val b1 = accessUnit[range.start + 1].toInt() and 0xff
+            val nalType = (b0 ushr 1) and 0x3f
+            val payloadHdr0 = (b0 and 0x81) or (NAL_FU shl 1)
+            val payloadHdr1 = b1
+            val chunk = maxPayload - 3
+            var offset = range.start + 2
+            while (offset < range.end) {
+                val length = minOf(chunk, range.end - offset)
+                val start = offset == range.start + 2
+                val end = offset + length == range.end
+                val fragment = ByteArray(3 + length)
+                fragment[0] = payloadHdr0.toByte()
+                fragment[1] = payloadHdr1.toByte()
+                fragment[2] = ((if (start) 0x80 else 0) or (if (end) 0x40 else 0) or nalType).toByte()
+                System.arraycopy(accessUnit, offset, fragment, 3, length)
+                payloads += fragment
+                offset += length
+            }
+        }
+        return payloads
+    }
+}
+
 /** AAC over RTP (RFC 3640, mode=AAC-hbr): one access unit per packet, fragmented if oversized. */
 internal object AacRtpPacketizer {
     /** Largest access unit a 13-bit AU-size field can describe. */

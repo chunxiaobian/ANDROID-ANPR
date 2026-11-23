@@ -15,7 +15,8 @@ internal class AndroidRtspHost(
     private val clientConnected: () -> Unit,
     private val clientDisconnected: () -> Unit,
     private val keyFrameRequest: (RtspStream) -> Unit,
-    private val streamingEnabled: () -> Boolean
+    private val streamingEnabled: () -> Boolean,
+    private val hevcEnabled: () -> Boolean = { false }
 ) : RtspServer.Host {
     private val prefs get() = PreferenceManager.getDefaultSharedPreferences(context)
 
@@ -35,6 +36,8 @@ internal class AndroidRtspHost(
     }
 
     override fun isStreamingEnabled(): Boolean = streamingEnabled()
+
+    override fun isHevc(): Boolean = hevcEnabled()
 
     override fun audioFormat(): AacFormat? =
         if (prefs.getBoolean(RtspServer.PREF_AUDIO, true) && hasMicrophonePermission()) AacAudioSource.FORMAT else null

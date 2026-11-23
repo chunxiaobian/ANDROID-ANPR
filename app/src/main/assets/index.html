@@ -956,7 +956,12 @@
               </div>
 
               <div style="margin-top: 8px;">
-                <label for="bitrate" data-i18n="bitrateLabel">H.264 码率 (kbps, 0 = 自动)</label>
+                <label for="videoCodecSelect">视频编码格式 <span class="val-badge" id="videoCodecNote" style="display:none;"></span></label>
+                <select id="videoCodecSelect" class="camera-select" style="margin-bottom: 8px;">
+                  <option value="h264">H.264 (AVC)</option>
+                  <option value="h265">H.265 (HEVC)</option>
+                </select>
+                <label for="bitrate" data-i18n="bitrateLabel">视频码率 (kbps, 0 = 自动)</label>
                 <input id="bitrate" type='number' min='0' max='20000' step='100' value='0' data-control='bitrate' style="margin-bottom: 8px;">
                 <button id="allowLimitedSurfaceBtn" type="button" class="btn btn-action" style="width: 100%; margin-bottom: 0;">🔒 LIMITED GPU直出: 已关闭</button>
               </div>
@@ -2258,6 +2263,7 @@
     // units and feed them to a VideoDecoder, drawing frames onto the same canvas.
     let h264Abort = null;
     let h264Decoder = null;
+    let currentVideoCodec = 'h264';
     function stopH264Stream() {
       if (h264Abort) { try { h264Abort.abort(); } catch (_) { } h264Abort = null; }
       if (h264Decoder) { try { h264Decoder.close(); } catch (_) { } h264Decoder = null; }
@@ -2349,12 +2355,13 @@
       };
       const onNal = (nal) => {
         if (!nal.length) return;
-        const type = nal[0] & 0x1f;
-        if (type === 7) {
+        const isHevc = currentVideoCodec === 'h265';
+        const type = isHevc ? ((nal[0] >>> 1) & 0x3f) : (nal[0] & 0x1f);
+        if ((!isHevc && type === 7) || (isHevc && type === 33)) {
           // Every IDR carries a fresh SPS. Reconfigure only when the stream itself
           // restarted with new encoding parameters (e.g. rotation swapped the encoder
           // dimensions), not on ordinary periodic keyframes with identical SPS.
-          const spsKey = nal.length + ':' + Array.from(nal, hex).join('');
+          const spsKey = (isHevc ? 'h265:' : 'h264:') + nal.length + ':' + Array.from(nal, hex).join('');
           if (configured && spsKey !== lastSpsKey) {
             h264Queue.length = 0;
             au = []; auHasVcl = false; auKey = false;
@@ -2365,14 +2372,23 @@
           }
           if (!configured) {
             lastSpsKey = spsKey;
-            try { decoder.configure({ codec: 'avc1.' + hex(nal[1]) + hex(nal[2]) + hex(nal[3]), optimizeForLatency: true }); configured = true; }
-            catch (e) { console.error('configure:', e); }
+            const codecStr = isHevc ? 'hev1.1.6.L93.B0' : ('avc1.' + hex(nal[1]) + hex(nal[2]) + hex(nal[3]));
+            try { decoder.configure({ codec: codecStr, optimizeForLatency: true }); configured = true; }
+            catch (e) {
+              if (isHevc) {
+                try { decoder.configure({ codec: 'hvc1.1.6.L93.B0', optimizeForLatency: true }); configured = true; }
+                catch (e2) { console.error('configure hevc:', e2); }
+              } else {
+                console.error('configure:', e);
+              }
+            }
           }
         }
-        const isVcl = type >= 1 && type <= 5;
+        const isVcl = isHevc ? (type >= 0 && type <= 31) : (type >= 1 && type <= 5);
+        const isKeyNal = isHevc ? (type >= 16 && type <= 21) : (type === 5);
         if (isVcl && auHasVcl) flush();            // a new VCL starts the next access unit
         au.push(nal.slice());
-        if (isVcl) { auHasVcl = true; if (type === 5) auKey = true; }
+        if (isVcl) { auHasVcl = true; if (isKeyNal) auKey = true; }
       };
       function playLoop() {
         if (controller.signal.aborted) return;
@@ -2749,6 +2765,32 @@
           });
         }
       }
+      const videoCodecSelect = getElById('videoCodecSelect');
+      const videoCodecNote = getElById('videoCodecNote');
+      if (videoCodecSelect && settings.videoCodec !== undefined) {
+        currentVideoCodec = settings.videoCodec || 'h264';
+        videoCodecSelect.value = currentVideoCodec;
+        const hevcOpt = videoCodecSelect.querySelector('option[value="h265"]');
+        if (hevcOpt) hevcOpt.disabled = settings.hevcSupported === false;
+        if (videoCodecNote) {
+          if (settings.hevcSupported === false) {
+            videoCodecNote.style.display = 'inline-block';
+            videoCodecNote.innerText = '设备不支持 H.265';
+          } else {
+            videoCodecNote.style.display = 'none';
+          }
+        }
+        if (!videoCodecSelect.dataset.bound) {
+          videoCodecSelect.dataset.bound = '1';
+          videoCodecSelect.addEventListener('change', () => {
+            currentVideoCodec = videoCodecSelect.value;
+            sendControl('video_codec', videoCodecSelect.value);
+            if (streamMode === 'h264') {
+              setTimeout(() => { startH264Stream(); }, 600);
+            }
+          });
+        }
+      }
       const captureApiSelect = getElById('captureApiSelect');
       const captureApiNote = getElById('captureApiNote');
       if (captureApiSelect && settings.captureApi !== undefined) {
@@ -2865,7 +2907,10 @@
         } else {
           powerEl.style.display = 'flex';
           const pIcon = data.batteryCharging ? '🔌' : '⚡';
-          powerEl.innerHTML = `${pIcon} ${data.batteryPowerW.toFixed(1)}W`;
+          const sign = data.batteryCharging ? '+' : '-';
+          powerEl.style.color = data.batteryCharging ? '#4ade80' : '#fbbf24';
+          powerEl.title = data.batteryCharging ? '正在充电功率' : '电池放电功耗';
+          powerEl.innerHTML = `${pIcon} ${sign}${data.batteryPowerW.toFixed(1)}W`;
         }
       }
 
@@ -4163,8 +4208,12 @@
               delBtn.addEventListener('click', () => {
                 if (!confirm(`确定删除录像文件 ${f.name}（同时清理关联过车记录）？`)) return;
                 fetch(`/files/${encodeURIComponent(f.name)}`, { method: 'DELETE', credentials: 'include' })
-                  .then(() => { loadManageVideos(); loadManageEvents(); })
-                  .catch(() => alert('删除失败'));
+                  .then(r => {
+                    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                    loadManageVideos();
+                    loadManageEvents();
+                  })
+                  .catch(() => alert('删除失败（可能无权限删除旧包名创建的录像或文件正在录制中）'));
               });
 
               actions.appendChild(playBtn);
@@ -4306,9 +4355,32 @@
           const names = Array.from(document.querySelectorAll('.mgr-video-cb:checked')).map(cb => cb.dataset.name).filter(Boolean);
           if (!names.length) return;
           if (!confirm(`确定删除选中的 ${names.length} 个录像文件（同时清理关联过车记录）？`)) return;
-          Promise.all(names.map(n => fetch(`/files/${encodeURIComponent(n)}`, { method: 'DELETE', credentials: 'include' })))
-            .then(() => { loadManageVideos(); loadManageEvents(); })
-            .catch(() => alert('批量删除失败'));
+          const prevText = mgrVideoDelSelectedBtn.textContent;
+          mgrVideoDelSelectedBtn.disabled = true;
+          mgrVideoDelSelectedBtn.textContent = '删除中...';
+          fetch('/files/delete', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ names })
+          })
+            .then(r => {
+              if (!r.ok) throw new Error(`HTTP ${r.status}`);
+              return r.json();
+            })
+            .then(res => {
+              if (res && res.failed > 0) {
+                const sample = (res.failedNames || []).slice(0, 5).join('\n');
+                alert(`已删除 ${res.deleted || 0} 个，${res.failed} 个删除失败（可能无权限删除旧包名/其他应用创建的录像，或文件正在录制中）：\n${sample}`);
+              }
+              loadManageVideos();
+              loadManageEvents();
+            })
+            .catch(() => alert('批量删除失败'))
+            .finally(() => {
+              mgrVideoDelSelectedBtn.textContent = prevText;
+              updateMgrVideoSelectionUi();
+            });
         });
       }
       if (mgrEventSelectAll) {

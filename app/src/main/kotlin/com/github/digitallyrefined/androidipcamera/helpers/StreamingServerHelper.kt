@@ -744,7 +744,7 @@ class StreamingServerHelper(
             }
 
             // ---- Recorded files endpoints (Movies/AndroidIPCamera or the custom folder) ----
-            if (fileManager.handleRequest(httpMethod, path, writer, outputStream, headers)) {
+            if (fileManager.handleRequest(httpMethod, path, writer, outputStream, headers, reader)) {
                 try { socket.close() } catch (_: Exception) {}
                 return
             }
@@ -1694,6 +1694,8 @@ class StreamingServerHelper(
         val onvifEnabled: Boolean,
         val captureApi: String,
         val camera2Unusable: Boolean,
+        val videoCodec: String,
+        val hevcSupported: Boolean,
     )
 
     private data class DeviceInfo(
@@ -1771,6 +1773,8 @@ class StreamingServerHelper(
                 put("onvifEnabled", settings.onvifEnabled)
                 put("captureApi", settings.captureApi)
                 put("camera2Unusable", settings.camera2Unusable)
+                put("videoCodec", settings.videoCodec)
+                put("hevcSupported", settings.hevcSupported)
             })
             put("appVersion", context.packageManager.getPackageInfo(context.packageName, 0).versionName.orEmpty())
         }.toString()
@@ -1929,6 +1933,8 @@ class StreamingServerHelper(
             onvifEnabled = prefs.getBoolean("rtsp_enabled", false),
             captureApi = prefs.getString("capture_api", "auto") ?: "auto",
             camera2Unusable = prefs.getBoolean("camera2_unusable", false),
+            videoCodec = if (prefs.getString("video_codec", "h264") == "h265" && VideoHardwareEncoder.isHevcSupported()) "h265" else "h264",
+            hevcSupported = VideoHardwareEncoder.isHevcSupported(),
         )
     }
 
@@ -1947,7 +1953,9 @@ class StreamingServerHelper(
     } catch (_: Throwable) { false }
 
     private fun buildCameraInfoList(idle: Boolean): List<InfoCamera> {
-        val encCaps = H264HardwareEncoder.caps()
+        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+        val useHevc = prefs.getString("video_codec", "h264") == "h265" && VideoHardwareEncoder.isHevcSupported()
+        val encCaps = VideoHardwareEncoder.caps(useHevc)
         val cm = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
         return try {
             val sources = cameraInfoSources(cm)

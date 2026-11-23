@@ -3,6 +3,7 @@ package com.github.digitallyrefined.androidipcamera.helpers
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.BufferedReader
 import java.io.IOException
 import java.io.OutputStream
 import java.io.PrintWriter
@@ -31,7 +32,8 @@ class FileManager(
         path: String,
         writer: PrintWriter,
         outputStream: OutputStream,
-        headers: List<String> = emptyList()
+        headers: List<String> = emptyList(),
+        reader: BufferedReader? = null
     ): Boolean {
         if (path != "/files" && path != "/files.json" && !path.startsWith("/files/")) return false
 
@@ -52,6 +54,11 @@ class FileManager(
                 return true
             }
             serveFilesJson(writer)
+            return true
+        }
+
+        if (path == "/files/delete") {
+            serveBatchDelete(httpMethod, headers, reader, writer)
             return true
         }
 
@@ -181,6 +188,88 @@ class FileManager(
                 writer.flush()
             }
         }
+    }
+
+    /**
+     * Batch-deletes recording files in a single request (`POST /files/delete` with JSON `{"names":[...]}`).
+     */
+    private fun serveBatchDelete(
+        httpMethod: String,
+        headers: List<String>,
+        reader: BufferedReader?,
+        writer: PrintWriter
+    ) {
+        if (httpMethod != "POST") {
+            writer.print("HTTP/1.1 405 Method Not Allowed\r\nAllow: POST\r\nConnection: close\r\n\r\n")
+            writer.flush()
+            return
+        }
+        val contentLength = headers.firstOrNull { it.startsWith("content-length:", ignoreCase = true) }
+            ?.substringAfter(':')?.trim()?.toIntOrNull() ?: 0
+        if (reader == null || contentLength <= 0 || contentLength > 4_000_000) {
+            writer.print("HTTP/1.1 400 Bad Request\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{\"error\":\"invalid_body\"}")
+            writer.flush()
+            return
+        }
+        val sb = StringBuilder(contentLength)
+        val buf = CharArray(4096)
+        var remaining = contentLength
+        while (remaining > 0) {
+            val n = reader.read(buf, 0, minOf(buf.size, remaining))
+            if (n <= 0) break
+            sb.append(buf, 0, n)
+            remaining -= n
+        }
+        val bodyUtf8 = sb.toString().toByteArray(Charsets.ISO_8859_1).toString(Charsets.UTF_8)
+        val namesArr = try {
+            JSONObject(bodyUtf8).optJSONArray("names")
+        } catch (_: Exception) {
+            null
+        }
+        if (namesArr == null) {
+            writer.print("HTTP/1.1 400 Bad Request\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{\"error\":\"invalid_json\"}")
+            writer.flush()
+            return
+        }
+
+        var deleted = 0
+        var notFound = 0
+        var failed = 0
+        val failedNames = JSONArray()
+        val store = try { PlateEventStore.getInstance(context) } catch (_: Exception) { null }
+
+        for (i in 0 until namesArr.length()) {
+            val fileName = namesArr.optString(i, "")
+            if (!RecordingsHelper.isValidFileName(fileName)) {
+                failed++
+                failedNames.put(fileName)
+                continue
+            }
+            when (RecordingsHelper.delete(context, fileName)) {
+                RecordingsHelper.DeleteResult.DELETED -> {
+                    deleted++
+                    try { store?.deleteEventsForVideo(fileName) } catch (_: Exception) {}
+                }
+                RecordingsHelper.DeleteResult.NOT_FOUND -> notFound++
+                RecordingsHelper.DeleteResult.FAILED -> {
+                    failed++
+                    failedNames.put(fileName)
+                }
+            }
+        }
+
+        val json = JSONObject().apply {
+            put("deleted", deleted)
+            put("notFound", notFound)
+            put("failed", failed)
+            put("failedNames", failedNames)
+        }.toString()
+        onLog("POST /files/delete -> deleted=$deleted notFound=$notFound failed=$failed")
+        writer.print("HTTP/1.1 200 OK\r\n")
+        writer.print("Content-Type: application/json; charset=utf-8\r\n")
+        writer.print("Connection: close\r\n\r\n")
+        writer.print(json)
+        writer.flush()
     }
 
     /**

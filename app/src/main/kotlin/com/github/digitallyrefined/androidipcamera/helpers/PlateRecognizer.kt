@@ -1750,7 +1750,7 @@ class PlateRecognizer(context: Context) {
                 updateHeadlightCapture(false, now)
             }
             if (currentMotionGateEnabled) {
-                if (!motion.hasMotion && latestPlates.isEmpty()) {
+                if (!motion.hasMotion) {
                     val rotW = if (rotationDegrees == 90 || rotationDegrees == 270) height else width
                     val rotH = if (rotationDegrees == 90 || rotationDegrees == 270) width else height
                     latestMotionDebug = MotionDebugInfo(
@@ -1766,13 +1766,14 @@ class PlateRecognizer(context: Context) {
                     val alprBackoffInterval = maxOf(currentIntervalMs, currentMotionBackoffMs)
                     if (consecutiveStaticChecks >= 2 && (now - lastAlprHeartbeatMs < alprBackoffInterval || consecutiveStaticChecks % STATIC_HEARTBEAT_INTERVAL != 0)) {
                         effectiveIntervalMs = currentIntervalMs
+                        latestPlates = emptyList()
                         latestVehicles = emptyList()
                         latestVehicleFilterStatus = "idle"
                         isProcessing.set(false)
                         return
                     }
                     lastAlprHeartbeatMs = now
-                } else if (motion.hasMotion) {
+                } else {
                     if (currentVehicleFilterMode == "heuristic") {
                         val (ok, reason) = passesHeuristicVehicleFilter(motion.clusterNorm, now)
                         if (currentMotionTorchTriggerMode == "vehicle" || (currentMotionTorchTriggerMode == "vehicle_or_headlight" && !motionPartialBrightJump)) {
@@ -1809,9 +1810,6 @@ class PlateRecognizer(context: Context) {
                         targetNorm = motion.cropNorm
                         motionCropActive = true
                     }
-                } else {
-                    // 画面静止但当前仍有已识别车牌：保持心跳或常规频率以追踪离开
-                    effectiveIntervalMs = currentIntervalMs
                 }
             } else {
                 effectiveIntervalMs = currentIntervalMs

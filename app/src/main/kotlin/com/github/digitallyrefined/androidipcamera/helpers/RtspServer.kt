@@ -79,6 +79,8 @@ internal class RtspServer(
         fun bootClockNanos(): Long? = null
         /** Address to bind the RTSP/RTP sockets to; null listens on all interfaces. */
         fun bindAddress(): InetAddress? = null
+        /** True when the video stream is H.265 / HEVC instead of H.264 / AVC. */
+        fun isHevc(): Boolean = false
     }
 
     companion object {
@@ -151,7 +153,8 @@ internal class RtspServer(
     /** Per-stream video state: each stream has its own encoder, parameter sets and timestamps. */
     private inner class VideoSource {
         val clock = RtpMediaClock(bootClockNanos = host::bootClockNanos)
-        @Volatile var parameterSets: Pair<ByteArray, ByteArray>? = null
+        /** (vps?, sps, pps) */
+        @Volatile var parameterSets: Triple<ByteArray?, ByteArray, ByteArray>? = null
         @Volatile var lastFrameNs: Long? = null
     }
     private val videoSources = RtspStream.values().associateWith { VideoSource() }
@@ -230,13 +233,25 @@ internal class RtspServer(
     }
 
     private fun cacheParameterSets(source: VideoSource, accessUnit: ByteArray) {
-        var sps: ByteArray? = null
-        var pps: ByteArray? = null
-        for (range in H264Bitstream.nalRanges(accessUnit)) {
-            if (range.type == 7 && sps == null) sps = accessUnit.copyOfRange(range.start, range.end)
-            if (range.type == 8 && pps == null) pps = accessUnit.copyOfRange(range.start, range.end)
+        if (host.isHevc()) {
+            var vps: ByteArray? = null
+            var sps: ByteArray? = null
+            var pps: ByteArray? = null
+            for (range in HevcBitstream.nalRanges(accessUnit)) {
+                if (range.type == HevcBitstream.NAL_VPS && vps == null) vps = accessUnit.copyOfRange(range.start, range.end)
+                if (range.type == HevcBitstream.NAL_SPS && sps == null) sps = accessUnit.copyOfRange(range.start, range.end)
+                if (range.type == HevcBitstream.NAL_PPS && pps == null) pps = accessUnit.copyOfRange(range.start, range.end)
+            }
+            if (vps != null && sps != null && pps != null) source.parameterSets = Triple(vps, sps, pps)
+        } else {
+            var sps: ByteArray? = null
+            var pps: ByteArray? = null
+            for (range in H264Bitstream.nalRanges(accessUnit)) {
+                if (range.type == 7 && sps == null) sps = accessUnit.copyOfRange(range.start, range.end)
+                if (range.type == 8 && pps == null) pps = accessUnit.copyOfRange(range.start, range.end)
+            }
+            if (sps != null && pps != null) source.parameterSets = Triple(null, sps, pps)
         }
-        if (sps != null && pps != null) source.parameterSets = sps to pps
     }
 
     private fun isCurrent(gen: Int): Boolean = synchronized(lock) { running && gen == generation }
@@ -553,7 +568,15 @@ internal class RtspServer(
             claimVideo()
             val params = awaitParameterSets(stream)
             val origin = socket.localAddress.hostAddress ?: "0.0.0.0"
-            val sdp = RtspSdp.build(origin, random.nextLong() and Long.MAX_VALUE, params?.first, params?.second, host.audioFormat())
+            val sdp = RtspSdp.build(
+                origin,
+                random.nextLong() and Long.MAX_VALUE,
+                params?.second,
+                params?.third,
+                host.audioFormat(),
+                vps = params?.first,
+                useHevc = host.isHevc()
+            )
             val base = if (request.uri.endsWith("/")) request.uri else "${request.uri}/"
             respond(
                 cseq, "200 OK",
@@ -563,8 +586,8 @@ internal class RtspServer(
             return true
         }
 
-        /** SPS/PPS of [stream]'s running encoder, waiting for the camera to start if it was idle. */
-        private fun awaitParameterSets(stream: RtspStream): Pair<ByteArray, ByteArray>? {
+        /** Parameter sets of [stream]'s running encoder, waiting for the camera to start if it was idle. */
+        private fun awaitParameterSets(stream: RtspStream): Triple<ByteArray?, ByteArray, ByteArray>? {
             val source = videoSources.getValue(stream)
             val deadline = System.nanoTime() + PARAMETER_SET_WAIT_MS * 1_000_000
             while (!closed.get()) {
@@ -909,7 +932,8 @@ internal class RtspServer(
                     if (!frame.isKey) return
                     videoWaitingKey = false
                 }
-                H264RtpPacketizer.payloads(frame.data)
+                if (host.isHevc()) HevcRtpPacketizer.payloads(frame.data)
+                else H264RtpPacketizer.payloads(frame.data)
             } else {
                 AacRtpPacketizer.payloads(frame.data)
             }

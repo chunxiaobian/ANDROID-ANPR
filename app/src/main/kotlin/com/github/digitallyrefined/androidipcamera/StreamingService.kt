@@ -72,10 +72,10 @@ class StreamingService : LifecycleService() {
     private var motionMonitor: MotionMonitor? = null
 
     // Streaming encoders (initialized when server is created)
-    private var h264StreamingEncoder: H264StreamingEncoder? = null
+    private var videoStreamingEncoder: VideoStreamingEncoder? = null
     private var mjpegStreamingEncoder: MjpegStreamingEncoder? = null
     private val encoders: List<StreamingEncoder>
-        get() = listOfNotNull(h264StreamingEncoder, mjpegStreamingEncoder)
+        get() = listOfNotNull(videoStreamingEncoder, mjpegStreamingEncoder)
 
     /** Motion detection is on: the camera must keep delivering frames even with no viewer. */
     private fun motionEnabled(): Boolean = motionMonitor?.enabled == true
@@ -98,7 +98,7 @@ class StreamingService : LifecycleService() {
     private var loopRecordingJob: kotlinx.coroutines.Job? = null
     private val loopRotateLock = Any()
     /** Smaller encoder feeding the RTSP sub stream (/live/sub) while it has viewers. */
-    @Volatile private var subEncoder: H264HardwareEncoder? = null
+    @Volatile private var subEncoder: VideoHardwareEncoder? = null
 
     @Volatile private var frontFacing = false             // false = back camera (read across threads)
     @Volatile private var selectedCameraId: String? = null
@@ -615,7 +615,7 @@ class StreamingService : LifecycleService() {
                 localRecorder?.let { it.currentFileName to it.recordingStartTimeMs } ?: (null to 0L)
             }
             // Initialize encoders with the streaming server helper
-            h264StreamingEncoder = H264StreamingEncoder(this, streamingServerHelper!!) { Log.i(TAG, "H264: $it"); onLog?.invoke(it) }
+            videoStreamingEncoder = VideoStreamingEncoder(this, streamingServerHelper!!) { Log.i(TAG, "H264: $it"); onLog?.invoke(it) }
             mjpegStreamingEncoder = MjpegStreamingEncoder(this, streamingServerHelper!!) { Log.i(TAG, "MJPEG: $it"); onLog?.invoke(it) }
             motionMonitor = MotionMonitor(this) { active ->
                 Log.i(TAG, "Motion ${if (active) "started" else "ended"}")
@@ -630,15 +630,16 @@ class StreamingService : LifecycleService() {
                     keyFrameRequest = { stream ->
                         val sub = subEncoder
                         if (stream == RtspStream.SUB && sub != null) sub.requestKeyFrame()
-                        else h264StreamingEncoder?.h264HardwareEncoder?.requestKeyFrame()
+                        else videoStreamingEncoder?.videoHardwareEncoder?.requestKeyFrame()
                     },
-                    streamingEnabled = { streamingServerHelper?.isStreamingEnabled() != false }
+                    streamingEnabled = { streamingServerHelper?.isStreamingEnabled() != false },
+                    hevcEnabled = { useHevc() }
                 ),
                 DeviceMemoryHelper.rtspSendQueueCapacity(this),
                 // Same certificate as the web server; null when TLS is disabled.
                 tls = { TlsHelper.serverConfig(this) }
             )
-            h264StreamingEncoder?.rtspServer = rtspServer
+            videoStreamingEncoder?.rtspServer = rtspServer
         }
         streamingServerHelper?.startStreamingServer()
         startRtspServerIfEnabled()
@@ -697,7 +698,7 @@ class StreamingService : LifecycleService() {
                 OnvifStreamInfo(
                     rtspUrl = "$scheme://${getLocalIpAddress()}:$rtspPort${RtspServer.PATH}",
                     width = size.width, height = size.height, fps = fps,
-                    bitrateKbps = H264HardwareEncoder.bitrateFor(size.width, size.height) / 1000,
+                    bitrateKbps = VideoHardwareEncoder.bitrateFor(size.width, size.height) / 1000,
                 )
             },
             credentials = { streamCredentials() },
@@ -767,8 +768,8 @@ class StreamingService : LifecycleService() {
                 return@launchMain
             }
             if (captureRunning) {
-                val h264NeedsSurfaceBind = h264StreamingEncoder?.hasClients() == true &&
-                    h264StreamingEncoder?.h264HardwareEncoder == null &&
+                val h264NeedsSurfaceBind = videoStreamingEncoder?.hasClients() == true &&
+                    videoStreamingEncoder?.videoHardwareEncoder == null &&
                     supportsSurfaceEncoder()
                 if (h264NeedsSurfaceBind) {
                     debouncedStartCamera()
@@ -776,7 +777,7 @@ class StreamingService : LifecycleService() {
                     // 相机与编码器已在运行，取消待执行的空闲卸载并直接请求关键帧，避免重开相机导致画面闪烁与重新对焦
                     pendingStartJob?.cancel()
                     pendingStartJob = null
-                    h264StreamingEncoder?.h264HardwareEncoder?.requestKeyFrame()
+                    videoStreamingEncoder?.videoHardwareEncoder?.requestKeyFrame()
                     updateSubStream()
                 }
             } else {
@@ -959,7 +960,7 @@ class StreamingService : LifecycleService() {
 
     /** Desired stream size from the resolution pref; "auto" → 1080p target (the device gives its best ≤ that). */
     private fun desiredSize(): Size {
-        val caps = H264HardwareEncoder.caps()
+        val caps = VideoHardwareEncoder.caps()
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
         val streamRes = prefs.getString("stream_res", "auto") ?: "auto"
         if (streamRes == "auto") {
@@ -1017,7 +1018,7 @@ class StreamingService : LifecycleService() {
         val resumeTorchHold = cameraHeldForTorch
         cameraHeldForTorch = false
         stopCamera()
-        h264StreamingEncoder?.awaitRelease()
+        videoStreamingEncoder?.awaitRelease()
         try {
             val want = desiredSize()
             val prefs = PreferenceManager.getDefaultSharedPreferences(this)
@@ -1150,19 +1151,20 @@ class StreamingService : LifecycleService() {
 
     private fun startCameraXBackend(want: Size) {
         // CameraX → ImageAnalysis YUV → encoders + optional Preview on the phone.
-        val h264 = h264StreamingEncoder
+        val h264 = videoStreamingEncoder
         var h264SurfaceProvider: Preview.SurfaceProvider? = null
 
         if (h264 != null && (h264.hasClients() || recordingNeeded || localRecorder?.isRecording == true) && supportsSurfaceEncoder()) {
             val prefs = PreferenceManager.getDefaultSharedPreferences(this)
             val fps = prefs.getString("stream_fps", "30")?.toIntOrNull() ?: 30
             val fpsCoerced = fps.coerceIn(1, 60)
-            fun newEncoder(size: Size) = H264HardwareEncoder(
+            fun newEncoder(size: Size) = VideoHardwareEncoder(
                 size.width,
                 size.height,
                 fpsCoerced,
                 configuredBitrateBps(size.width, size.height),
-                true // useSurface = true
+                true, // useSurface = true
+                useHevc = useHevc()
             ) { d, k, pts -> h264.broadcastH264(d, k, pts) }
 
             // Encode in the picture's shape (portrait when the camera image is upright portrait).
@@ -1233,9 +1235,9 @@ class StreamingService : LifecycleService() {
                 }
                 val recording = localRecorder?.isRecording == true || recordingNeeded
                 val activeEncoders = encoders.filter { it.hasClients() }
-                if (recording && h264StreamingEncoder != null) {
-                    h264StreamingEncoder?.processFrame(img)
-                    activeEncoders.filter { it != h264StreamingEncoder }.forEach { it.processFrame(img) }
+                if (recording && videoStreamingEncoder != null) {
+                    videoStreamingEncoder?.processFrame(img)
+                    activeEncoders.filter { it != videoStreamingEncoder }.forEach { it.processFrame(img) }
                 } else if (activeEncoders.isNotEmpty()) {
                     activeEncoders.forEach { it.processFrame(img) }
                 }
@@ -1280,7 +1282,7 @@ class StreamingService : LifecycleService() {
      */
     private fun updateSubStream() {
         val rtsp = rtspServer ?: return
-        val h264 = h264StreamingEncoder ?: return
+        val h264 = videoStreamingEncoder ?: return
         val pipe = cameraXGlPipe ?: glPipe
         if (pipe == null || !rtsp.hasSubVideoClients()) {
             stopSubStream()
@@ -1291,10 +1293,11 @@ class StreamingService : LifecycleService() {
         val shortSide = prefs.getString(RtspServer.PREF_SUB_SIZE, null)?.toIntOrNull() ?: RtspServer.DEFAULT_SUB_SIZE
         val fps = (prefs.getString(RtspServer.PREF_SUB_FPS, null)?.toIntOrNull() ?: RtspServer.DEFAULT_SUB_FPS).coerceIn(1, 60)
         val kbps = prefs.getString(RtspServer.PREF_SUB_BITRATE, null)?.toIntOrNull() ?: RtspServer.DEFAULT_SUB_BITRATE_KBPS
-        val bitrate = H264HardwareEncoder.clampBitrate(kbps * 1000L)
+        val hevc = useHevc()
+        val bitrate = VideoHardwareEncoder.clampBitrate(kbps * 1000L, hevc)
         val (w, h) = CameraGlPipe.scaledFrame(pipe.width, pipe.height, shortSide)
         val enc = try {
-            H264HardwareEncoder(w, h, fps, bitrate, true, RtspServer.SUB_KEYFRAME_INTERVAL_SEC) { d, k, pts ->
+            VideoHardwareEncoder(w, h, fps, bitrate, true, RtspServer.SUB_KEYFRAME_INTERVAL_SEC, useHevc = hevc) { d, k, pts ->
                 rtsp.onVideoFrame(d, k, pts, RtspStream.SUB)
             }
         } catch (e: Exception) {
@@ -1317,9 +1320,9 @@ class StreamingService : LifecycleService() {
     private fun stopSubStream() {
         val enc = subEncoder ?: return
         subEncoder = null
-        h264StreamingEncoder?.subStreamEncoded = false
+        videoStreamingEncoder?.subStreamEncoded = false
         rtspServer?.resyncVideo(RtspStream.SUB)
-        h264StreamingEncoder?.h264HardwareEncoder?.requestKeyFrame()
+        videoStreamingEncoder?.videoHardwareEncoder?.requestKeyFrame()
         (cameraXGlPipe ?: glPipe)?.setSecondaryOutput(null)
         enc.stop()
     }
@@ -1336,11 +1339,16 @@ class StreamingService : LifecycleService() {
         }
     }
 
+    private fun useHevc(): Boolean =
+        PreferenceManager.getDefaultSharedPreferences(this).getString("video_codec", "h264") == "h265" &&
+            VideoHardwareEncoder.isHevcSupported()
+
     private fun configuredBitrateBps(w: Int, h: Int): Int {
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
         val kbps = prefs.getInt("stream_bitrate_kbps", 0)
-        return if (kbps > 0) H264HardwareEncoder.clampBitrate(kbps * 1000L)
-        else H264HardwareEncoder.bitrateFor(w, h)
+        val hevc = useHevc()
+        return if (kbps > 0) VideoHardwareEncoder.clampBitrate(kbps * 1000L, hevc)
+        else VideoHardwareEncoder.bitrateFor(w, h, hevc)
     }
 
     /** Per-camera rotate= knob (token then physical id fallback). Consumers apply their own
@@ -1371,8 +1379,8 @@ class StreamingService : LifecycleService() {
         val fps = prefs.getString("stream_fps", "30")?.toIntOrNull() ?: 30
         val fpsCoerced = fps.coerceIn(1, 60)
         val frame = surfaceEncoderSize(cameraSize)
-        val enc = H264HardwareEncoder(frame.width, frame.height, fpsCoerced, configuredBitrateBps(frame.width, frame.height), true) { d, k, pts -> h264StreamingEncoder?.broadcastH264(d, k, pts) }
-        h264StreamingEncoder?.setEncoder(enc)
+        val enc = VideoHardwareEncoder(frame.width, frame.height, fpsCoerced, configuredBitrateBps(frame.width, frame.height), true, useHevc = useHevc()) { d, k, pts -> videoStreamingEncoder?.broadcastH264(d, k, pts) }
+        videoStreamingEncoder?.setEncoder(enc)
         streamingServerHelper?.resetH264Wait()
         return CameraGlPipe(enc.inputSurface!!, frame.width, frame.height, fpsCoerced).also {
             it.mirror = readMirrorPref()
@@ -1965,10 +1973,20 @@ class StreamingService : LifecycleService() {
             "bitrate" -> {
                 val kbps = value.toIntOrNull()?.coerceIn(0, 20000) ?: return
                 prefs.edit().putInt("stream_bitrate_kbps", kbps).apply()
-                h264StreamingEncoder?.h264HardwareEncoder?.let { enc ->
-                    val targetBps = if (kbps > 0) kbps * 1000 else H264HardwareEncoder.bitrateFor(enc.width, enc.height)
+                videoStreamingEncoder?.videoHardwareEncoder?.let { enc ->
+                    val targetBps = if (kbps > 0) kbps * 1000 else VideoHardwareEncoder.bitrateFor(enc.width, enc.height, enc.useHevc)
                     enc.updateBitrate(targetBps)
                 }
+            }
+            "video_codec" -> {
+                val codec = if (value.equals("h265", ignoreCase = true) || value.equals("hevc", ignoreCase = true)) {
+                    if (VideoHardwareEncoder.isHevcSupported()) "h265" else "h264"
+                } else {
+                    "h264"
+                }
+                prefs.edit().putString("video_codec", codec).apply()
+                Log.i(TAG, "video_codec=$codec; reconfiguring camera")
+                launchMain { if (captureRunning) startCamera(force = true) }
             }
             "allow_limited_surface" -> {
                 val allow = value.equals("true", ignoreCase = true) || value == "1"
@@ -2071,7 +2089,7 @@ class StreamingService : LifecycleService() {
                 // a new encoder (the byte-buffer encoder resizes itself per frame). Applies to both
                 // the CameraX and Camera1 GL pipes. Not while recording: restarting the camera
                 // would end the recording.
-                val current = h264StreamingEncoder?.h264HardwareEncoder
+                val current = videoStreamingEncoder?.videoHardwareEncoder
                 val camera1Pipe = glPipe
                 val pipe = cameraXGlPipe ?: camera1Pipe
                 if (pipe != null && current != null && localRecorder?.isRecording != true) {
@@ -2167,11 +2185,11 @@ class StreamingService : LifecycleService() {
             try { latch.await(3, TimeUnit.SECONDS) } catch (_: Exception) {}
         }
 
-        var enc = h264StreamingEncoder?.h264HardwareEncoder
+        var enc = videoStreamingEncoder?.videoHardwareEncoder
         var attempts = 0
         while (enc == null && attempts < 20) {
             try { Thread.sleep(100) } catch (_: Exception) {}
-            enc = h264StreamingEncoder?.h264HardwareEncoder
+            enc = videoStreamingEncoder?.videoHardwareEncoder
             attempts++
         }
 
@@ -2184,7 +2202,7 @@ class StreamingService : LifecycleService() {
         }
 
         return try {
-            val recorder = LocalRecorder(this, enc.width, enc.height)
+            val recorder = LocalRecorder(this, enc.width, enc.height).apply { useHevc = enc.useHevc }
             recorder.start()
             enc.onRecordFrame = { bytes, isKey, pts -> recorder.feedFrame(bytes, isKey, pts) }
             enc.requestKeyFrame()
@@ -2206,7 +2224,7 @@ class StreamingService : LifecycleService() {
             """{"error":"not_recording","message":"No recording is in progress"}"""
         )
         return try {
-            h264StreamingEncoder?.h264HardwareEncoder?.onRecordFrame = null
+            videoStreamingEncoder?.videoHardwareEncoder?.onRecordFrame = null
             val finalStatus = recorder.statusJson()
             recorder.stop()
             localRecorder = null
@@ -2310,10 +2328,10 @@ class StreamingService : LifecycleService() {
 
     private fun rotateRecordingSegment() {
         synchronized(loopRotateLock) {
-            val enc = h264StreamingEncoder?.h264HardwareEncoder ?: return
+            val enc = videoStreamingEncoder?.videoHardwareEncoder ?: return
             val oldRecorder = localRecorder ?: return
             try {
-                val newRecorder = LocalRecorder(this, enc.width, enc.height)
+                val newRecorder = LocalRecorder(this, enc.width, enc.height).apply { useHevc = enc.useHevc }
                 newRecorder.start()
                 enc.onRecordFrame = { bytes, isKey, pts -> newRecorder.feedFrame(bytes, isKey, pts) }
                 enc.requestKeyFrame()
@@ -2372,7 +2390,7 @@ class StreamingService : LifecycleService() {
     /** Safely stops any active recording (used in stopCamera/onDestroy safety nets). */
     private fun safeStopRecording() {
         try {
-            h264StreamingEncoder?.h264HardwareEncoder?.onRecordFrame = null
+            videoStreamingEncoder?.videoHardwareEncoder?.onRecordFrame = null
             localRecorder?.stop()
         } catch (e: Exception) {
             Log.e(TAG, "safeStopRecording: ${e.message}")
