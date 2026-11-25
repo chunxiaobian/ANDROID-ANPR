@@ -171,6 +171,10 @@ class CameraXCapture(
                     .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
                 val analysisInterop = Camera2Interop.Extender(aBuilder)
                 physicalCameraId?.let { analysisInterop.setPhysicalCameraId(it) }
+                analysisInterop.setCaptureRequestOption(
+                    CaptureRequest.STATISTICS_FACE_DETECT_MODE,
+                    CaptureRequest.STATISTICS_FACE_DETECT_MODE_OFF
+                )
                 // Some legacy HALs (e.g. this phone's rear cam) stall the analysis stream unless an AE
                 // target FPS range is set. Use the WIDEST advertised range, not a fixed lock — AE stays
                 // fully auto (drops low for light in the dark, up to 30 in good light).
@@ -194,27 +198,31 @@ class CameraXCapture(
                         width = img.width; height = img.height
                         hasProducedFrame = true
                         try {
-                            if (plateRecognizer.canProcessNow()) {
-                                val crop = img.cropRect
-                                val nv21 = synchronized(nv21Lock) {
+                            val crop = img.cropRect
+                            val convertAndCache = {
+                                synchronized(nv21Lock) {
                                     convertYUV420toNV21(img, nv21Buffer, nv21RowBuffer).also {
                                         nv21Buffer = it
                                         if (nv21RowBuffer == null || nv21RowBuffer!!.size < img.planes[0].rowStride) {
                                             nv21RowBuffer = ByteArray(img.planes[0].rowStride)
                                         }
-
-                                        // 将nv21数据传给车牌识别器进行识别（方向与视频流的 rotate 设置保持一致）
-                                        plateRecognizer.processNv21Async(
-                                            nv21Source = it,
-                                            width = crop.width(),
-                                            height = crop.height(),
-                                            rotationDegrees = readConfiguredRotationDegrees()
-                                        )
+                                        latestNv21 = it
+                                        latestNv21W = crop.width()
+                                        latestNv21H = crop.height()
+                                        latestNv21AtMs = System.currentTimeMillis()
                                     }
                                 }
-                                latestNv21 = nv21
-                                latestNv21W = crop.width(); latestNv21H = crop.height()
-                                latestNv21AtMs = System.currentTimeMillis()
+                            }
+                            var converted = false
+                            if (plateRecognizer.canProcessNow()) {
+                                converted = plateRecognizer.processImageProxyAsync(
+                                    image = img,
+                                    rotationDegrees = readConfiguredRotationDegrees(),
+                                    convertToNv21 = convertAndCache
+                                )
+                            }
+                            if (!converted && (latestNv21 == null || System.currentTimeMillis() - latestNv21AtMs >= 4_500L)) {
+                                convertAndCache()
                             }
                         } catch (e: Exception) { Log.e(TAG, "frame cache: ${e.message}") }
                         onFrame(img)

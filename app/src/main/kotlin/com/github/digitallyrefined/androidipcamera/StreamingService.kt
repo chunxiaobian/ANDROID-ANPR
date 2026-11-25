@@ -554,7 +554,9 @@ class StreamingService : LifecycleService() {
                         vehicleCropEnabled = params["vehicleCropEnabled"]?.let { it == "true" || it == "1" } ?: current.vehicleCropEnabled,
                         motionTorchTriggerMode = params["motionTorchTriggerMode"] ?: current.motionTorchTriggerMode,
                         feedVehicleOnly = params["feedVehicleOnly"]?.let { it == "true" || it == "1" } ?: current.feedVehicleOnly,
-                        vehicleModelName = params["vehicleModelName"] ?: current.vehicleModelName
+                        vehicleModelName = params["vehicleModelName"] ?: current.vehicleModelName,
+                        maskEnabled = params["maskEnabled"]?.let { it == "true" || it == "1" } ?: current.maskEnabled,
+                        maskRects = params["maskRects"] ?: current.maskRects
                     )
                     val saved = com.github.digitallyrefined.androidipcamera.helpers.PlateRecognizer.saveConfig(this, updated)
                     plateRecognizer.reloadConfig(saved)

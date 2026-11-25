@@ -1,0 +1,26 @@
+{
+  "id": "/",
+  "name": "Android ANPR · 车牌抓拍",
+  "short_name": "Android ANPR",
+  "description": "Edge ALPR, IP Camera, 24h Loop Recorder & Timeline Playback Console",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#121212",
+  "theme_color": "#1e1e1e",
+  "icons": [
+    {
+      "src": "/pwa-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/pwa-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

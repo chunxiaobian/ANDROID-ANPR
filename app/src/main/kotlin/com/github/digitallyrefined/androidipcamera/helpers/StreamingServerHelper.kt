@@ -492,24 +492,21 @@ class StreamingServerHelper(
             val uri = requestParts[1]
             val path = uri.substringBefore('?')
 
-            val secureStorage = SecureStorage(context)
-            val rawUsername = secureStorage.getSecureString(SecureStorage.KEY_USERNAME, "") ?: ""
-            val rawPassword = secureStorage.getSecureString(SecureStorage.KEY_PASSWORD, "") ?: ""
-
-            // Check if authentication is enabled
+            // Check if authentication is enabled before touching Keystore-backed SecureStorage
             val prefs = PreferenceManager.getDefaultSharedPreferences(context)
             val enableAuth = prefs.getBoolean("enable_auth", true)
 
-            // Validate stored credentials if auth is enabled
-            val username = if (enableAuth) {
-                InputValidator.validateAndSanitizeUsername(rawUsername)
+            val username: String?
+            val password: String?
+            if (enableAuth) {
+                val secureStorage = SecureStorage(context)
+                val rawUsername = secureStorage.getSecureString(SecureStorage.KEY_USERNAME, "") ?: ""
+                val rawPassword = secureStorage.getSecureString(SecureStorage.KEY_PASSWORD, "") ?: ""
+                username = InputValidator.validateAndSanitizeUsername(rawUsername)
+                password = InputValidator.validateAndSanitizePassword(rawPassword)
             } else {
-                null
-            }
-            val password = if (enableAuth) {
-                InputValidator.validateAndSanitizePassword(rawPassword)
-            } else {
-                null
+                username = null
+                password = null
             }
 
             if (enableAuth) {
@@ -635,6 +632,40 @@ class StreamingServerHelper(
                 writer.print(htmlResponse)
                 writer.flush()
                 socket.close()
+                return
+            }
+
+            if (path == "/manifest.webmanifest" || path == "/sw.js" || path == "/pwa-icon-192.png" || path == "/pwa-icon-512.png") {
+                val assetName = path.removePrefix("/")
+                val contentType = when {
+                    assetName.endsWith(".webmanifest") -> "application/manifest+json; charset=utf-8"
+                    assetName.endsWith(".js") -> "application/javascript; charset=utf-8"
+                    else -> "image/png"
+                }
+                val bytes = try {
+                    context.assets.open(assetName).use { it.readBytes() }
+                } catch (_: Exception) {
+                    null
+                }
+                if (bytes == null) {
+                    writer.print("HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n")
+                    writer.flush()
+                } else {
+                    writer.print("HTTP/1.1 200 OK\r\n")
+                    writer.print("Content-Type: $contentType\r\n")
+                    writer.print("Content-Length: ${bytes.size}\r\n")
+                    if (assetName == "sw.js") {
+                        writer.print("Service-Worker-Allowed: /\r\n")
+                        writer.print("Cache-Control: no-cache\r\n")
+                    } else {
+                        writer.print("Cache-Control: max-age=86400\r\n")
+                    }
+                    writer.print("Connection: close\r\n\r\n")
+                    writer.flush()
+                    outputStream.write(bytes)
+                    outputStream.flush()
+                }
+                try { socket.close() } catch (_: Exception) {}
                 return
             }
 
@@ -2194,6 +2225,8 @@ class StreamingServerHelper(
         private val cachedCamera1PreviewSizes = ConcurrentHashMap<String, List<Pair<Int, Int>>>()
         @Volatile private var cachedTelemetry: DeviceTelemetry? = null
         @Volatile private var cachedTelemetryAtMs: Long = 0L
+        /** Learned per-device sign convention for BATTERY_PROPERTY_CURRENT_NOW (true if positive = discharging). */
+        @Volatile private var invertedCurrentSign: Boolean? = null
 
         fun readTelemetry(context: Context): DeviceTelemetry {
             val now = System.currentTimeMillis()
@@ -2208,9 +2241,6 @@ class StreamingServerHelper(
             }
             val status = intent?.getIntExtra(android.os.BatteryManager.EXTRA_STATUS, -1) ?: -1
             val plugged = intent?.getIntExtra(android.os.BatteryManager.EXTRA_PLUGGED, 0) ?: 0
-            val isCharging = plugged != 0 ||
-                status == android.os.BatteryManager.BATTERY_STATUS_CHARGING ||
-                status == android.os.BatteryManager.BATTERY_STATUS_FULL
             val voltageMv = intent?.getIntExtra(android.os.BatteryManager.EXTRA_VOLTAGE, 0) ?: 0
             val tempTenths = intent?.getIntExtra(android.os.BatteryManager.EXTRA_TEMPERATURE, Int.MIN_VALUE) ?: Int.MIN_VALUE
             val batteryTempC = if (tempTenths in -500..1500) Math.round(tempTenths.toDouble()) / 10.0 else -999.0
@@ -2225,6 +2255,22 @@ class StreamingServerHelper(
             } catch (_: Exception) {
                 Int.MIN_VALUE
             }
+
+            // Auto-detect OEM current sign when definitely discharging (unplugged or DISCHARGING status)
+            val definitelyDischarging = plugged == 0 || status == android.os.BatteryManager.BATTERY_STATUS_DISCHARGING
+            if (definitelyDischarging && rawCurrent != Int.MIN_VALUE && rawCurrent != 0) {
+                invertedCurrentSign = rawCurrent > 0
+            }
+
+            val isCharging = when {
+                definitelyDischarging || status == android.os.BatteryManager.BATTERY_STATUS_NOT_CHARGING -> false
+                rawCurrent != Int.MIN_VALUE && rawCurrent != 0 -> {
+                    val isDischargingByCurrent = if (invertedCurrentSign == true) rawCurrent > 0 else rawCurrent < 0
+                    !isDischargingByCurrent && status == android.os.BatteryManager.BATTERY_STATUS_CHARGING
+                }
+                else -> status == android.os.BatteryManager.BATTERY_STATUS_CHARGING
+            }
+
             val batteryPowerW = if (rawCurrent != Int.MIN_VALUE && rawCurrent != 0) {
                 val absRaw = kotlin.math.abs(rawCurrent.toDouble())
                 val currentMa = if (absRaw <= 5000.0) absRaw else absRaw / 1000.0

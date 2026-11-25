@@ -4,7 +4,14 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Android IP Camera</title>
+  <meta name="theme-color" content="#1e1e1e" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Android ANPR" />
+  <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/pwa-icon-192.png" />
+  <link rel="apple-touch-icon" href="/pwa-icon-192.png" />
+  <title>Android ANPR</title>
   <style>
     body {
       background: #121212;
@@ -266,6 +273,21 @@
       width: 100%;
       margin-bottom: 20px;
       cursor: pointer;
+    }
+
+    .sliders-locked input[type=range] {
+      pointer-events: none;
+      opacity: 0.62;
+    }
+
+    .sliders-unlocked input[type=range] {
+      height: 28px;
+      accent-color: #38bdf8;
+    }
+
+    .sliders-unlocked input[type=range]::-webkit-slider-thumb {
+      width: 24px;
+      height: 24px;
     }
 
     input[type=number],
@@ -690,6 +712,7 @@
         <button id='origBtn' class='btn' onclick='setView("original")' data-i18n="btnOriginal">原始大小</button>
         <button id='fullscreenBtn' class='btn' onclick='toggleFullscreen()' data-i18n="btnFullscreen">⛶ 全屏</button>
       </div>
+      <button id='pwaInstallBtn' class='btn' style='display:none;' title='安装为独立应用'>📲 安装应用</button>
       <button id='langToggleBtn' class='btn' title='Switch Language / 切换语言'>🌐 EN</button>
     </div>
   </div>
@@ -716,6 +739,9 @@
       </div>
 
       <div class='controls-content'>
+        <div style="margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+          <button id="sliderLockBtn" type="button" class="btn" style="flex: 1; margin: 0; padding: 6px 10px; font-size: 12px; font-weight: 600;">🔒 滑块已锁定（防误触，点击放大解锁）</button>
+        </div>
         <!-- 新增：实时车牌识别看板 -->
         <div id="alpr-card" class='setting-group' style="border-left: 4px solid #38bdf8; background: #1e293b; transition: background-color 0.25s ease, border-color 0.25s ease;">
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
@@ -815,6 +841,20 @@
                 <input type="range" id="alprRoiW" min="0.10" max="1.00" step="0.05" value="1.00">
                 <label for="alprRoiH"><span data-i18n="alprRoiH">ROI 高度 (H)</span> <span class="val-badge" id="alprRoiHVal">0.75</span></label>
                 <input type="range" id="alprRoiH" min="0.10" max="1.00" step="0.05" value="0.75">
+              </div>
+
+              <label style="display: flex; align-items: center; gap: 8px; margin-top: 8px; cursor: pointer;">
+                <input type="checkbox" id="alprMaskEnabled" style="width: auto; margin: 0;">
+                <span>屏蔽遮罩区域 (Exclusion Mask)</span>
+                <span class="val-badge" id="alprMaskCount">0 个</span>
+              </label>
+              <div id="alpr-mask-box" style="display: none; margin-top: 6px; padding: 8px; background: rgba(127, 29, 29, 0.28); border-radius: 6px; border: 1px solid rgba(239, 68, 68, 0.4);">
+                <div style="display: flex; gap: 6px; align-items: center;">
+                  <button id="alprMaskDrawBtn" type="button" class="btn" style="flex: 1; margin: 0; padding: 5px 8px; font-size: 11px;">🖌️ 在画面框选遮罩</button>
+                  <button id="alprMaskUndoBtn" type="button" class="btn" style="margin: 0; padding: 5px 8px; font-size: 11px;">↩ 撤销</button>
+                  <button id="alprMaskClearBtn" type="button" class="btn" style="margin: 0; padding: 5px 8px; font-size: 11px; background: rgba(185, 28, 28, 0.7);">🗑 清空</button>
+                </div>
+                <div style="font-size: 11px; color: #fca5a5; margin-top: 5px;">开启框选后，直接在左侧监控画面上拖拽即可添加屏蔽区（不参与运动唤醒与车牌识别）。</div>
               </div>
             </div>
 
@@ -950,17 +990,20 @@
                   data-badge='audioGainVal'>
               </div>
 
+              <div style="margin-bottom: 8px;">
+                <label for="videoCodecSelect">视频编码格式 <span class="val-badge" id="videoCodecNote" style="display:none;"></span></label>
+                <select id="videoCodecSelect" class="camera-select" style="margin-bottom: 8px;">
+                  <option value="h264">H.264 (AVC)</option>
+                  <option value="h265">H.265 (HEVC)</option>
+                </select>
+              </div>
+
               <div>
                 <button id="modeH264Btn" class="btn btn-action" style="width: 49%;">H.264</button>
                 <button id="modeMjpegBtn" class="btn btn-action" style="width: 49%;">MJPEG</button>
               </div>
 
               <div style="margin-top: 8px;">
-                <label for="videoCodecSelect">视频编码格式 <span class="val-badge" id="videoCodecNote" style="display:none;"></span></label>
-                <select id="videoCodecSelect" class="camera-select" style="margin-bottom: 8px;">
-                  <option value="h264">H.264 (AVC)</option>
-                  <option value="h265">H.265 (HEVC)</option>
-                </select>
                 <label for="bitrate" data-i18n="bitrateLabel">视频码率 (kbps, 0 = 自动)</label>
                 <input id="bitrate" type='number' min='0' max='20000' step='100' value='0' data-control='bitrate' style="margin-bottom: 8px;">
                 <button id="allowLimitedSurfaceBtn" type="button" class="btn btn-action" style="width: 100%; margin-bottom: 0;">🔒 LIMITED GPU直出: 已关闭</button>
@@ -1194,7 +1237,7 @@
             <button id="tlZoomPm" type="button" class="btn" style="margin:0;padding:3px 8px;font-size:11px;" data-i18n="tlZoomPm">下午</button>
             <button id="tlZoom1h" type="button" class="btn" style="margin:0;padding:3px 8px;font-size:11px;" data-i18n="tlZoom1h">1小时</button>
             <button id="tlZoom15m" type="button" class="btn" style="margin:0;padding:3px 8px;font-size:11px;" data-i18n="tlZoom15m">15分钟</button>
-            <a id="playbackDownloadLink" href="#" target="_blank" class="btn" style="display:none;margin:0;padding:3px 9px;font-size:11px;" data-i18n="pbDownload">下载当前段</a>
+            <a id="playbackDownloadLink" href="#" class="btn" style="display:none;margin:0;padding:3px 9px;font-size:11px;text-decoration:none;" data-i18n="pbDownload">下载当前段</a>
           </div>
         </div>
         <canvas id="playbackTimelineCanvas" class="timeline-canvas"></canvas>
@@ -1397,7 +1440,7 @@
         holdToTalk: '🎙️ 按住对讲',
         avDelayLabel: '音画同步延迟',
         audioGainLabel: '音频增益',
-        bitrateLabel: 'H.264 码率 (kbps, 0 = 自动)',
+        bitrateLabel: '视频码率 (kbps, 0 = 自动)',
         limitedOn: '⚡ LIMITED GPU直出: 已开启 (实验)',
         limitedOff: '🔒 LIMITED GPU直出: 已关闭',
         cameraControlTitle: '相机控制',
@@ -1549,7 +1592,7 @@
         holdToTalk: '🎙️ Hold to Talk',
         avDelayLabel: 'AV Sync Delay',
         audioGainLabel: 'Audio Gain',
-        bitrateLabel: 'H.264 Bitrate (kbps, 0 = Auto)',
+        bitrateLabel: 'Video Bitrate (kbps, 0 = Auto)',
         limitedOn: '⚡ LIMITED GPU Surface: ON (Exp)',
         limitedOff: '🔒 LIMITED GPU Surface: OFF',
         cameraControlTitle: 'Camera Control',
@@ -2767,9 +2810,16 @@
       }
       const videoCodecSelect = getElById('videoCodecSelect');
       const videoCodecNote = getElById('videoCodecNote');
+      const updateModeCodecBtnLabel = () => {
+        const hBtn = getElById('modeH264Btn');
+        if (hBtn && !hBtn.disabled) {
+          hBtn.textContent = currentVideoCodec === 'h265' ? 'H.265' : 'H.264';
+        }
+      };
       if (videoCodecSelect && settings.videoCodec !== undefined) {
         currentVideoCodec = settings.videoCodec || 'h264';
         videoCodecSelect.value = currentVideoCodec;
+        updateModeCodecBtnLabel();
         const hevcOpt = videoCodecSelect.querySelector('option[value="h265"]');
         if (hevcOpt) hevcOpt.disabled = settings.hevcSupported === false;
         if (videoCodecNote) {
@@ -2784,6 +2834,7 @@
           videoCodecSelect.dataset.bound = '1';
           videoCodecSelect.addEventListener('change', () => {
             currentVideoCodec = videoCodecSelect.value;
+            updateModeCodecBtnLabel();
             sendControl('video_codec', videoCodecSelect.value);
             if (streamMode === 'h264') {
               setTimeout(() => { startH264Stream(); }, 600);
@@ -3313,6 +3364,45 @@
         ctx.strokeRect(rx, ry, rw, rh);
         ctx.restore();
       }
+      if (window.alprMaskState && window.alprMaskState.enabled && lastVideoRect) {
+        const masks = window.alprMaskState.rects || [];
+        const drawBox = window.alprMaskState.drawing;
+        ctx.save();
+        masks.forEach((m, idx) => {
+          const mx = lastVideoRect.dx + m.x * lastVideoRect.dw;
+          const my = lastVideoRect.dy + m.y * lastVideoRect.dh;
+          const mw = m.w * lastVideoRect.dw;
+          const mh = m.h * lastVideoRect.dh;
+          ctx.fillStyle = 'rgba(239, 68, 68, 0.30)';
+          ctx.fillRect(mx, my, mw, mh);
+          ctx.strokeStyle = 'rgba(248, 113, 113, 0.95)';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([5, 3]);
+          ctx.strokeRect(mx, my, mw, mh);
+          ctx.setLineDash([]);
+          ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, sans-serif';
+          ctx.fillStyle = 'rgba(220, 38, 38, 0.92)';
+          const lbl = `屏蔽 #${idx + 1}`;
+          const tw = ctx.measureText(lbl).width + 8;
+          ctx.fillRect(mx, my, tw, 16);
+          ctx.fillStyle = '#ffffff';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(lbl, mx + 4, my + 8);
+        });
+        if (drawBox && drawBox.w > 0.005 && drawBox.h > 0.005) {
+          const dx = lastVideoRect.dx + drawBox.x * lastVideoRect.dw;
+          const dy = lastVideoRect.dy + drawBox.y * lastVideoRect.dh;
+          const dw = drawBox.w * lastVideoRect.dw;
+          const dh = drawBox.h * lastVideoRect.dh;
+          ctx.fillStyle = 'rgba(239, 68, 68, 0.22)';
+          ctx.fillRect(dx, dy, dw, dh);
+          ctx.strokeStyle = '#fca5a5';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([4, 2]);
+          ctx.strokeRect(dx, dy, dw, dh);
+        }
+        ctx.restore();
+      }
       if (window.alprMotionVisEnabled && motionDebug && lastVideoRect) {
         ctx.save();
         if (motionDebug.clusterX2 > motionDebug.clusterX1 && motionDebug.clusterY2 > motionDebug.clusterY1) {
@@ -3599,6 +3689,14 @@
       let headlightCaptureEnabled = false;
       const roiEnabledEl = getElById('alprRoiEnabled');
       const roiBoxEl = getElById('alpr-roi-box');
+      const maskEnabledEl = getElById('alprMaskEnabled');
+      const maskBoxEl = getElById('alpr-mask-box');
+      const maskCountEl = getElById('alprMaskCount');
+      const maskDrawBtn = getElById('alprMaskDrawBtn');
+      const maskUndoBtn = getElById('alprMaskUndoBtn');
+      const maskClearBtn = getElById('alprMaskClearBtn');
+      let maskRects = [];
+      let maskDrawMode = false;
       const roiXEl = getElById('alprRoiX');
       const roiXValEl = getElById('alprRoiXVal');
       const roiYEl = getElById('alprRoiY');
@@ -3665,7 +3763,105 @@
           w: roiWEl ? Number(roiWEl.value) : 1,
           h: roiHEl ? Number(roiHEl.value) : 0.75
         };
+        if (maskBoxEl && maskEnabledEl) maskBoxEl.style.display = maskEnabledEl.checked ? 'block' : 'none';
+        if (maskCountEl) maskCountEl.textContent = `${maskRects.length} 个`;
+        window.alprMaskState = {
+          enabled: Boolean(maskEnabledEl && maskEnabledEl.checked),
+          rects: maskRects,
+          drawing: window.alprMaskState ? window.alprMaskState.drawing : null
+        };
       }
+      function setMaskDrawMode(on) {
+        maskDrawMode = Boolean(on);
+        const overlay = getElById('alprOverlayCanvas');
+        if (overlay) {
+          overlay.style.pointerEvents = maskDrawMode ? 'auto' : 'none';
+          overlay.style.cursor = maskDrawMode ? 'crosshair' : '';
+        }
+        if (maskDrawBtn) {
+          maskDrawBtn.textContent = maskDrawMode ? '✅ 完成框选 (点击退出)' : '🖌️ 在画面框选遮罩';
+          maskDrawBtn.style.background = maskDrawMode ? 'rgba(220, 38, 38, 0.85)' : '';
+        }
+      }
+      if (maskEnabledEl) {
+        maskEnabledEl.addEventListener('change', () => {
+          if (!maskEnabledEl.checked) setMaskDrawMode(false);
+          syncBadges();
+        });
+      }
+      if (maskDrawBtn) {
+        maskDrawBtn.addEventListener('click', () => setMaskDrawMode(!maskDrawMode));
+      }
+      if (maskUndoBtn) {
+        maskUndoBtn.addEventListener('click', () => {
+          if (maskRects.length) {
+            maskRects.pop();
+            syncBadges();
+          }
+        });
+      }
+      if (maskClearBtn) {
+        maskClearBtn.addEventListener('click', () => {
+          maskRects = [];
+          setMaskDrawMode(false);
+          syncBadges();
+        });
+      }
+      (function bindMaskCanvasDraw() {
+        const overlay = getElById('alprOverlayCanvas');
+        if (!overlay) return;
+        let dragStart = null;
+        const toNorm = (clientX, clientY) => {
+          if (!lastVideoRect || !lastVideoRect.dw || !lastVideoRect.dh) return null;
+          const rect = overlay.getBoundingClientRect();
+          const cx = (clientX - rect.left) * (overlay.width / Math.max(1, rect.width));
+          const cy = (clientY - rect.top) * (overlay.height / Math.max(1, rect.height));
+          const nx = Math.max(0, Math.min(1, (cx - lastVideoRect.dx) / lastVideoRect.dw));
+          const ny = Math.max(0, Math.min(1, (cy - lastVideoRect.dy) / lastVideoRect.dh));
+          return { x: nx, y: ny };
+        };
+        overlay.addEventListener('pointerdown', (e) => {
+          if (!maskDrawMode) return;
+          const pt = toNorm(e.clientX, e.clientY);
+          if (!pt) return;
+          dragStart = pt;
+          overlay.setPointerCapture(e.pointerId);
+          window.alprMaskState = { enabled: true, rects: maskRects, drawing: { x: pt.x, y: pt.y, w: 0, h: 0 } };
+        });
+        overlay.addEventListener('pointermove', (e) => {
+          if (!maskDrawMode || !dragStart) return;
+          const pt = toNorm(e.clientX, e.clientY);
+          if (!pt) return;
+          window.alprMaskState = {
+            enabled: true,
+            rects: maskRects,
+            drawing: {
+              x: Math.min(dragStart.x, pt.x),
+              y: Math.min(dragStart.y, pt.y),
+              w: Math.abs(pt.x - dragStart.x),
+              h: Math.abs(pt.y - dragStart.y)
+            }
+          };
+        });
+        const finishDrag = (e) => {
+          if (!dragStart) return;
+          const d = window.alprMaskState && window.alprMaskState.drawing;
+          dragStart = null;
+          if (d && d.w >= 0.02 && d.h >= 0.02 && maskRects.length < 12) {
+            maskRects.push({
+              x: Number(d.x.toFixed(3)),
+              y: Number(d.y.toFixed(3)),
+              w: Number(d.w.toFixed(3)),
+              h: Number(d.h.toFixed(3))
+            });
+          }
+          if (window.alprMaskState) window.alprMaskState.drawing = null;
+          syncBadges();
+          try { overlay.releasePointerCapture(e.pointerId); } catch (_) {}
+        };
+        overlay.addEventListener('pointerup', finishDrag);
+        overlay.addEventListener('pointercancel', finishDrag);
+      })();
 
       [maxNumEl, boxConfEl, recConfEl, threadsEl, intervalMsEl, roiXEl, roiYEl, roiWEl, roiHEl,
        motionDiffEl, motionAreaEl, motionBgAlphaEl, motionMinCellsEl, motionPadEl, motionBackoffEl, motionTorchHoldEl,
@@ -3806,6 +4002,8 @@
         if (roiYEl && cfg.roiY !== undefined) roiYEl.value = Number(cfg.roiY).toFixed(2);
         if (roiWEl && cfg.roiW !== undefined) roiWEl.value = Number(cfg.roiW).toFixed(2);
         if (roiHEl && cfg.roiH !== undefined) roiHEl.value = Number(cfg.roiH).toFixed(2);
+        if (maskEnabledEl && cfg.maskEnabled !== undefined) maskEnabledEl.checked = Boolean(cfg.maskEnabled);
+        if (Array.isArray(cfg.maskRects)) maskRects = cfg.maskRects;
         if (motionDiffEl && cfg.motionDiffThreshold !== undefined) motionDiffEl.value = String(cfg.motionDiffThreshold);
         if (motionAreaEl && cfg.motionAreaRatio !== undefined) motionAreaEl.value = Number(cfg.motionAreaRatio).toFixed(2);
         if (motionBgAlphaEl && cfg.motionBgAlpha !== undefined) motionBgAlphaEl.value = Number(cfg.motionBgAlpha).toFixed(2);
@@ -3887,6 +4085,8 @@
             roiY: roiYEl ? roiYEl.value : '0.25',
             roiW: roiWEl ? roiWEl.value : '1.00',
             roiH: roiHEl ? roiHEl.value : '0.75',
+            maskEnabled: maskEnabledEl ? String(maskEnabledEl.checked) : 'false',
+            maskRects: JSON.stringify(maskRects),
             motionDiffThreshold: motionDiffEl ? motionDiffEl.value : '20',
             motionAreaRatio: motionAreaEl ? motionAreaEl.value : '0.05',
             motionBgAlpha: motionBgAlphaEl ? motionBgAlphaEl.value : '0.05',
@@ -4049,6 +4249,47 @@
       const tlTooltip = getElById('timelineTooltip');
       const nowInfoEl = getElById('playbackNowInfo');
       const downloadLink = getElById('playbackDownloadLink');
+
+      function downloadFileViaFetch(url, fileName, triggerEl) {
+        if (!url || url === '#') return;
+        const prevText = triggerEl ? triggerEl.textContent : '';
+        if (triggerEl) {
+          if (triggerEl.dataset.downloading === '1') return;
+          triggerEl.dataset.downloading = '1';
+          triggerEl.textContent = '⬇ 下载中...';
+          triggerEl.style.opacity = '0.7';
+        }
+        fetch(url, { credentials: 'include' })
+          .then(r => {
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            return r.blob();
+          })
+          .then(blob => {
+            const objUrl = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = objUrl;
+            a.download = fileName || 'recording.mp4';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(objUrl), 5000);
+          })
+          .catch(() => alert('下载失败'))
+          .finally(() => {
+            if (triggerEl) {
+              triggerEl.dataset.downloading = '';
+              triggerEl.textContent = prevText;
+              triggerEl.style.opacity = '1';
+            }
+          });
+      }
+
+      if (downloadLink) {
+        downloadLink.addEventListener('click', (e) => {
+          e.preventDefault();
+          downloadFileViaFetch(downloadLink.getAttribute('href'), downloadLink.download, downloadLink);
+        });
+      }
       const fullSnapWrap = getElById('playbackFullSnapWrap');
       const fullSnapImg = getElById('playbackFullSnap');
       const snapTitleEl = getElById('playbackSnapTitle');
@@ -4196,9 +4437,12 @@
               dlLink.className = 'btn';
               dlLink.style.cssText = 'margin:0;padding:3px 9px;font-size:11px;text-decoration:none;';
               dlLink.href = `/files/${encodeURIComponent(f.name)}`;
-              dlLink.target = '_blank';
               dlLink.download = f.name;
               dlLink.textContent = '⬇ 下载';
+              dlLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                downloadFileViaFetch(dlLink.getAttribute('href'), f.name, dlLink);
+              });
 
               const delBtn = document.createElement('button');
               delBtn.type = 'button';
@@ -4441,6 +4685,23 @@
       }
 
       let activeTabMode = 'live';
+      let playbackAutoRefreshTimer = null;
+      function startPlaybackAutoRefresh() {
+        stopPlaybackAutoRefresh();
+        playbackAutoRefreshTimer = setInterval(() => {
+          if (activeTabMode !== 'playback') return;
+          loadSegmentsAndTimeline();
+          if (typeof currentOffset === 'number' && currentOffset === 0 && typeof loadEvents === 'function') {
+            loadEvents();
+          }
+        }, 10000);
+      }
+      function stopPlaybackAutoRefresh() {
+        if (playbackAutoRefreshTimer) {
+          clearInterval(playbackAutoRefreshTimer);
+          playbackAutoRefreshTimer = null;
+        }
+      }
       function switchTab(mode) {
         if (mode === activeTabMode) return;
         activeTabMode = mode;
@@ -4458,7 +4719,9 @@
           pauseLivePreview();
           loadSegmentsAndTimeline();
           loadEvents();
+          startPlaybackAutoRefresh();
         } else if (isManage) {
+          stopPlaybackAutoRefresh();
           pauseLivePreview();
           [videoA, videoB].forEach(v => {
             try { v.pause(); v.removeAttribute('src'); v.load(); } catch (_) {}
@@ -4469,6 +4732,7 @@
           loadManageVideos();
           loadManageEvents();
         } else {
+          stopPlaybackAutoRefresh();
           [videoA, videoB].forEach(v => {
             try {
               v.pause();
@@ -4503,7 +4767,13 @@
         playPauseBtn.addEventListener('click', () => {
           const v = getActiveVideo();
           if (!v.src) {
-            if (segments.length > 0) playSegmentAt(0, 0);
+            if (segments.length > 0) {
+              if (currentWallMs > 0) {
+                seekToWallTime(currentWallMs);
+              } else {
+                playSegmentAt(segments.length - 1, 0);
+              }
+            }
             return;
           }
           if (v.paused) v.play().catch(() => {});
@@ -4777,6 +5047,7 @@
         const dlUrl = `/files/${encodeURIComponent(seg.name)}`;
         if (downloadLink) {
           downloadLink.href = dlUrl;
+          downloadLink.download = seg.name;
           downloadLink.style.display = 'inline-block';
         }
         if (nowInfoEl) {
@@ -4854,6 +5125,7 @@
         const seg = segments[nextIdx];
         if (downloadLink && seg) {
           downloadLink.href = `/files/${encodeURIComponent(seg.name)}`;
+          downloadLink.download = seg.name;
           downloadLink.style.display = 'inline-block';
         }
         if (nowInfoEl && seg) {
@@ -5371,7 +5643,65 @@
     })();
 
     applyLanguage(currentLang);
-    
+
+    // ---- 手机端防误触滑块锁定/放大开关 ----
+    (function initSliderLock() {
+      const panel = document.getElementById('controlsPanel');
+      const btn = document.getElementById('sliderLockBtn');
+      if (!panel || !btn) return;
+      const isTouch = (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) || ('ontouchstart' in window);
+      const saved = localStorage.getItem('slidersLocked');
+      let locked = saved !== null ? (saved === '1') : isTouch;
+      const apply = () => {
+        panel.classList.toggle('sliders-locked', locked);
+        panel.classList.toggle('sliders-unlocked', !locked);
+        if (locked) {
+          btn.textContent = '🔒 滑块已锁定（防误触，点击放大解锁）';
+          btn.style.background = 'rgba(30, 41, 59, 0.85)';
+          btn.style.borderColor = '#475569';
+          btn.style.color = '#cbd5e1';
+        } else {
+          btn.textContent = '🔓 滑块已放大解锁（可拖动，点击锁定）';
+          btn.style.background = 'rgba(14, 116, 144, 0.75)';
+          btn.style.borderColor = '#38bdf8';
+          btn.style.color = '#ffffff';
+        }
+      };
+      btn.addEventListener('click', () => {
+        locked = !locked;
+        localStorage.setItem('slidersLocked', locked ? '1' : '0');
+        apply();
+      });
+      apply();
+    })();
+
+    // ---- PWA Service Worker & Install Prompt ----
+    (function initPwa() {
+      if ('serviceWorker' in navigator && window.isSecureContext) {
+        navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
+      }
+      let deferredPrompt = null;
+      const installBtn = document.getElementById('pwaInstallBtn');
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        if (installBtn) installBtn.style.display = 'inline-block';
+      });
+      window.addEventListener('appinstalled', () => {
+        deferredPrompt = null;
+        if (installBtn) installBtn.style.display = 'none';
+      });
+      if (installBtn) {
+        installBtn.addEventListener('click', async () => {
+          if (!deferredPrompt) return;
+          deferredPrompt.prompt();
+          try { await deferredPrompt.userChoice; } catch (_) {}
+          deferredPrompt = null;
+          installBtn.style.display = 'none';
+        });
+      }
+    })();
+
   </script>
 </body>
 

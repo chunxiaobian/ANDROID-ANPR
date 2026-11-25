@@ -233,8 +233,14 @@ object RecordingsHelper {
         val recording = findMediaRecording(context, name) ?: return null
         val uri = ContentUris.withAppendedId(mediaStoreCollection(), recording.id)
         return try {
-            val stream = context.contentResolver.openInputStream(uri) ?: return null
-            OpenRecording(stream, if (recording.sizeBytes > 0) recording.sizeBytes else stream.available().toLong())
+            val pfd = context.contentResolver.openFileDescriptor(uri, "r")
+            if (pfd != null) {
+                val realSize = pfd.statSize.takeIf { it > 0 } ?: recording.sizeBytes
+                OpenRecording(android.os.ParcelFileDescriptor.AutoCloseInputStream(pfd), realSize)
+            } else {
+                val stream = context.contentResolver.openInputStream(uri) ?: return null
+                OpenRecording(stream, recording.sizeBytes)
+            }
         } catch (e: Exception) {
             Log.w(TAG, "open($name) failed: ${e.message}")
             null

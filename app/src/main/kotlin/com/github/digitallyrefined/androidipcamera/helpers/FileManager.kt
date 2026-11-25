@@ -146,7 +146,9 @@ class FileManager(
                     writer.print("HTTP/1.1 200 OK\r\n")
                     // octet-stream + attachment forces a download instead of browser video playback
                     writer.print("Content-Type: application/octet-stream\r\n")
-                    writer.print("Content-Length: ${recording.sizeBytes}\r\n")
+                    if (recording.sizeBytes > 0) {
+                        writer.print("Content-Length: ${recording.sizeBytes}\r\n")
+                    }
                     writer.print("Content-Disposition: attachment; filename=\"${fileName.replace("\"", "")}\"\r\n")
                     writer.print("Connection: close\r\n\r\n")
                     writer.flush()
