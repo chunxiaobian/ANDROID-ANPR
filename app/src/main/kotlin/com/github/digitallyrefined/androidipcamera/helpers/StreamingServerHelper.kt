@@ -73,6 +73,7 @@ class StreamingServerHelper(
     private val onVehicleModelsList: () -> String = { """{"current":"","models":[]}""" },
     private val onVehicleModelUpload: (String, ByteArray) -> String = { _, _ -> """{"ok":false}""" },
     private val onVehicleModelDelete: (String) -> String = { """{"ok":false}""" },
+    private val onEventLogsQuery: (Map<String, String>) -> String = { """{"lastSeq":0,"logs":[]}""" },
     private val isCameraActive: () -> Boolean = { false }
 
 ) {
@@ -874,6 +875,19 @@ class StreamingServerHelper(
             if (path == "/api/events/delete") {
                 val params = parseQueryParams(uri)
                 val json = onPlateEventsDelete(params)
+                writer.print("HTTP/1.1 200 OK\r\n")
+                writer.print("Content-Type: application/json; charset=utf-8\r\n")
+                writer.print("Cache-Control: no-cache\r\n")
+                writer.print("Connection: close\r\n\r\n")
+                writer.print(json)
+                writer.flush()
+                try { socket.close() } catch (_: Exception) {}
+                return
+            }
+
+            if (path == "/api/logs") {
+                val params = parseQueryParams(uri)
+                val json = onEventLogsQuery(params)
                 writer.print("HTTP/1.1 200 OK\r\n")
                 writer.print("Content-Type: application/json; charset=utf-8\r\n")
                 writer.print("Cache-Control: no-cache\r\n")
@@ -1779,10 +1793,7 @@ class StreamingServerHelper(
             })
             put("batteryPercent", batteryPercent)
             put("wifiStrength", wifiStrength)
-            put("batteryPowerW", telemetry.batteryPowerW)
-            put("batteryCharging", telemetry.batteryCharging)
-            put("batteryTempC", telemetry.batteryTempC)
-            put("cpuTempC", telemetry.cpuTempC)
+            appendTelemetryJson(this, telemetry)
             put("settings", JSONObject().apply {
                 // Keep global stream-level settings here; per-camera lens settings are exposed
                 // under `cameras[].lensSettings` and should be used by the UI.
@@ -2214,77 +2225,425 @@ class StreamingServerHelper(
         }
     }
 
+    data class CoreCpuTelemetry(
+        val core: Int,
+        val online: Boolean,
+        val usagePercent: Double,
+        val curFreqMhz: Int,
+        val maxFreqMhz: Int,
+        val cluster: String
+    )
+
+    data class GpuTelemetry(
+        val available: Boolean,
+        val usagePercent: Double,
+        val curFreqMhz: Int,
+        val maxFreqMhz: Int,
+        val note: String
+    )
+
     data class DeviceTelemetry(
         val batteryPowerW: Double,
         val batteryCharging: Boolean,
         val batteryTempC: Double,
-        val cpuTempC: Double
+        val cpuTempC: Double,
+        val cpuUsagePercent: Double,
+        val appCpuCorePercent: Double,
+        val cpuUsageScope: String,
+        val cpuCores: List<CoreCpuTelemetry>,
+        val gpu: GpuTelemetry
+    )
+
+    private data class CpuUsageSample(
+        val totalPercent: Double,
+        val appCorePercent: Double,
+        val scope: String,
+        val cores: List<CoreCpuTelemetry>
     )
 
     companion object {
         private val cachedCamera1PreviewSizes = ConcurrentHashMap<String, List<Pair<Int, Int>>>()
+        private val telemetryLock = Any()
+        private val WHITESPACE_REGEX = Regex("\\s+")
+        private val DIGITS_REGEX = Regex("\\d+")
         @Volatile private var cachedTelemetry: DeviceTelemetry? = null
         @Volatile private var cachedTelemetryAtMs: Long = 0L
         /** Learned per-device sign convention for BATTERY_PROPERTY_CURRENT_NOW (true if positive = discharging). */
         @Volatile private var invertedCurrentSign: Boolean? = null
+        @Volatile private var prevSysTotalCpu: Long = -1L
+        @Volatile private var prevSysIdleCpu: Long = -1L
+        private var prevSysPerCoreTotal = LongArray(0)
+        private var prevSysPerCoreIdle = LongArray(0)
+        @Volatile private var prevAppCpuMs: Long = -1L
+        @Volatile private var prevAppWallMs: Long = -1L
+        private var prevTaskTicks: Map<String, Long> = emptyMap()
+
+        fun appendTelemetryJson(json: JSONObject, telemetry: DeviceTelemetry) {
+            json.put("batteryPowerW", telemetry.batteryPowerW)
+            json.put("batteryCharging", telemetry.batteryCharging)
+            json.put("batteryTempC", telemetry.batteryTempC)
+            json.put("cpuTempC", telemetry.cpuTempC)
+            json.put("cpuUsagePercent", telemetry.cpuUsagePercent)
+            json.put("appCpuCorePercent", telemetry.appCpuCorePercent)
+            json.put("cpuUsageScope", telemetry.cpuUsageScope)
+            json.put("cpuCores", JSONArray().apply {
+                for (c in telemetry.cpuCores) {
+                    put(JSONObject().apply {
+                        put("core", c.core)
+                        put("online", c.online)
+                        put("usagePercent", c.usagePercent)
+                        put("curFreqMhz", c.curFreqMhz)
+                        put("maxFreqMhz", c.maxFreqMhz)
+                        put("cluster", c.cluster)
+                    })
+                }
+            })
+            json.put("gpu", JSONObject().apply {
+                put("available", telemetry.gpu.available)
+                put("usagePercent", telemetry.gpu.usagePercent)
+                put("curFreqMhz", telemetry.gpu.curFreqMhz)
+                put("maxFreqMhz", telemetry.gpu.maxFreqMhz)
+                put("note", telemetry.gpu.note)
+            })
+        }
 
         fun readTelemetry(context: Context): DeviceTelemetry {
-            val now = System.currentTimeMillis()
+            val now = android.os.SystemClock.elapsedRealtime()
             val prev = cachedTelemetry
             if (prev != null && now - cachedTelemetryAtMs < 2000L) {
                 return prev
             }
-            val intent = try {
-                context.registerReceiver(null, android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED))
-            } catch (_: Exception) {
-                null
-            }
-            val status = intent?.getIntExtra(android.os.BatteryManager.EXTRA_STATUS, -1) ?: -1
-            val plugged = intent?.getIntExtra(android.os.BatteryManager.EXTRA_PLUGGED, 0) ?: 0
-            val voltageMv = intent?.getIntExtra(android.os.BatteryManager.EXTRA_VOLTAGE, 0) ?: 0
-            val tempTenths = intent?.getIntExtra(android.os.BatteryManager.EXTRA_TEMPERATURE, Int.MIN_VALUE) ?: Int.MIN_VALUE
-            val batteryTempC = if (tempTenths in -500..1500) Math.round(tempTenths.toDouble()) / 10.0 else -999.0
-
-            val bm = try {
-                context.getSystemService(Context.BATTERY_SERVICE) as? android.os.BatteryManager
-            } catch (_: Exception) {
-                null
-            }
-            val rawCurrent = try {
-                bm?.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CURRENT_NOW) ?: Int.MIN_VALUE
-            } catch (_: Exception) {
-                Int.MIN_VALUE
-            }
-
-            // Auto-detect OEM current sign when definitely discharging (unplugged or DISCHARGING status)
-            val definitelyDischarging = plugged == 0 || status == android.os.BatteryManager.BATTERY_STATUS_DISCHARGING
-            if (definitelyDischarging && rawCurrent != Int.MIN_VALUE && rawCurrent != 0) {
-                invertedCurrentSign = rawCurrent > 0
-            }
-
-            val isCharging = when {
-                definitelyDischarging || status == android.os.BatteryManager.BATTERY_STATUS_NOT_CHARGING -> false
-                rawCurrent != Int.MIN_VALUE && rawCurrent != 0 -> {
-                    val isDischargingByCurrent = if (invertedCurrentSign == true) rawCurrent > 0 else rawCurrent < 0
-                    !isDischargingByCurrent && status == android.os.BatteryManager.BATTERY_STATUS_CHARGING
+            synchronized(telemetryLock) {
+                val nowLocked = android.os.SystemClock.elapsedRealtime()
+                val prevLocked = cachedTelemetry
+                if (prevLocked != null && nowLocked - cachedTelemetryAtMs < 2000L) {
+                    return prevLocked
                 }
-                else -> status == android.os.BatteryManager.BATTERY_STATUS_CHARGING
+                val intent = try {
+                    context.registerReceiver(null, android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED))
+                } catch (_: Exception) {
+                    null
+                }
+                val status = intent?.getIntExtra(android.os.BatteryManager.EXTRA_STATUS, -1) ?: -1
+                val plugged = intent?.getIntExtra(android.os.BatteryManager.EXTRA_PLUGGED, 0) ?: 0
+                val voltageMv = intent?.getIntExtra(android.os.BatteryManager.EXTRA_VOLTAGE, 0) ?: 0
+                val tempTenths = intent?.getIntExtra(android.os.BatteryManager.EXTRA_TEMPERATURE, Int.MIN_VALUE) ?: Int.MIN_VALUE
+                val batteryTempC = if (tempTenths in -500..1500) Math.round(tempTenths.toDouble()) / 10.0 else -999.0
+
+                val bm = try {
+                    context.getSystemService(Context.BATTERY_SERVICE) as? android.os.BatteryManager
+                } catch (_: Exception) {
+                    null
+                }
+                val rawCurrent = try {
+                    bm?.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CURRENT_NOW) ?: Int.MIN_VALUE
+                } catch (_: Exception) {
+                    Int.MIN_VALUE
+                }
+
+                // Auto-detect OEM current sign when definitely discharging (unplugged or DISCHARGING status)
+                val definitelyDischarging = plugged == 0 || status == android.os.BatteryManager.BATTERY_STATUS_DISCHARGING
+                if (definitelyDischarging && rawCurrent != Int.MIN_VALUE && rawCurrent != 0) {
+                    invertedCurrentSign = rawCurrent > 0
+                }
+
+                val isCharging = when {
+                    definitelyDischarging || status == android.os.BatteryManager.BATTERY_STATUS_NOT_CHARGING -> false
+                    rawCurrent != Int.MIN_VALUE && rawCurrent != 0 -> {
+                        val isDischargingByCurrent = if (invertedCurrentSign == true) rawCurrent > 0 else rawCurrent < 0
+                        !isDischargingByCurrent && status == android.os.BatteryManager.BATTERY_STATUS_CHARGING
+                    }
+                    else -> status == android.os.BatteryManager.BATTERY_STATUS_CHARGING
+                }
+
+                val batteryPowerW = if (rawCurrent != Int.MIN_VALUE && rawCurrent != 0) {
+                    val absRaw = kotlin.math.abs(rawCurrent.toDouble())
+                    val currentMa = if (absRaw <= 5000.0) absRaw else absRaw / 1000.0
+                    val volts = if (voltageMv > 2000) voltageMv / 1000.0 else 3.8
+                    Math.round(((currentMa / 1000.0) * volts) * 100.0) / 100.0
+                } else {
+                    -1.0
+                }
+
+                val cpuTempC = readCpuTempC(context)
+                val cpuSample = readCpuUsage(nowLocked)
+                val gpu = readGpuTelemetry()
+                val fresh = DeviceTelemetry(
+                    batteryPowerW = batteryPowerW,
+                    batteryCharging = isCharging,
+                    batteryTempC = batteryTempC,
+                    cpuTempC = cpuTempC,
+                    cpuUsagePercent = cpuSample.totalPercent,
+                    appCpuCorePercent = cpuSample.appCorePercent,
+                    cpuUsageScope = cpuSample.scope,
+                    cpuCores = cpuSample.cores,
+                    gpu = gpu
+                )
+                cachedTelemetry = fresh
+                cachedTelemetryAtMs = nowLocked
+                return fresh
+            }
+        }
+
+        private fun readIntFile(path: String): Int? = try {
+            val f = File(path)
+            if (f.canRead()) f.readText().trim().toIntOrNull() else null
+        } catch (_: Exception) {
+            null
+        }
+
+        /**
+         * Samples total and per-core CPU utilization over the delta since the previous telemetry call.
+         * Prefers system-wide `/proc/stat` when readable, falling back to per-thread `/proc/self/task/<tid>/stat`
+         * plus `/sys/devices/system/cpu/cpuN/cpufreq` on Android 8+ where SELinux blocks `/proc/stat`.
+         */
+        private fun readCpuUsage(nowWallMs: Long): CpuUsageSample {
+            val cores = Runtime.getRuntime().availableProcessors().coerceAtLeast(1)
+            val appCpuMs = try {
+                android.os.Process.getElapsedCpuTime()
+            } catch (_: Exception) {
+                -1L
+            }
+            val pWall = prevAppWallMs
+            val pCpu = prevAppCpuMs
+            val dWall = if (pWall > 0L && nowWallMs > pWall) (nowWallMs - pWall).toDouble() else -1.0
+            var appCorePct = -1.0
+            var appTotalPct = -1.0
+            if (appCpuMs >= 0L) {
+                if (dWall > 0.0 && pCpu >= 0L && appCpuMs >= pCpu) {
+                    val dCpu = (appCpuMs - pCpu).toDouble()
+                    val coreRaw = ((dCpu / dWall) * 100.0).coerceIn(0.0, cores * 100.0)
+                    appCorePct = Math.round(coreRaw * 10.0) / 10.0
+                    appTotalPct = Math.round((coreRaw / cores.toDouble()).coerceIn(0.0, 100.0) * 10.0) / 10.0
+                }
+                prevAppWallMs = nowWallMs
+                prevAppCpuMs = appCpuMs
             }
 
-            val batteryPowerW = if (rawCurrent != Int.MIN_VALUE && rawCurrent != 0) {
-                val absRaw = kotlin.math.abs(rawCurrent.toDouble())
-                val currentMa = if (absRaw <= 5000.0) absRaw else absRaw / 1000.0
-                val volts = if (voltageMv > 2000) voltageMv / 1000.0 else 3.8
-                Math.round(((currentMa / 1000.0) * volts) * 100.0) / 100.0
-            } else {
-                -1.0
+            // Per-core app CPU attribution via /proc/self/task/<tid>/stat (works in untrusted_app)
+            val appPerCorePct = DoubleArray(cores) { -1.0 }
+            try {
+                val clkTck = try {
+                    android.system.Os.sysconf(android.system.OsConstants._SC_CLK_TCK).coerceAtLeast(1L)
+                } catch (_: Throwable) {
+                    100L
+                }
+                val taskDirs = File("/proc/self/task").listFiles()
+                val nextTaskTicks = HashMap<String, Long>(taskDirs?.size ?: 16)
+                val coreTickDeltas = LongArray(cores)
+                if (taskDirs != null) {
+                    for (dir in taskDirs) {
+                        val tid = dir.name
+                        val line = try {
+                            File(dir, "stat").readText()
+                        } catch (_: Exception) {
+                            continue
+                        }
+                        val rparen = line.lastIndexOf(')')
+                        if (rparen <= 0 || rparen + 2 >= line.length) continue
+                        val parts = line.substring(rparen + 2).trim().split(WHITESPACE_REGEX)
+                        if (parts.size <= 36) continue
+                        val utime = parts[11].toLongOrNull() ?: 0L
+                        val stime = parts[12].toLongOrNull() ?: 0L
+                        val cpuIdx = parts[36].toIntOrNull() ?: -1
+                        val ticks = utime + stime
+                        nextTaskTicks[tid] = ticks
+                        val prev = prevTaskTicks[tid]
+                        if (dWall > 0.0 && prev != null && ticks >= prev && cpuIdx in 0 until cores) {
+                            coreTickDeltas[cpuIdx] += (ticks - prev)
+                        }
+                    }
+                }
+                if (dWall > 0.0 && prevTaskTicks.isNotEmpty()) {
+                    for (c in 0 until cores) {
+                        val coreMs = (coreTickDeltas[c].toDouble() * 1000.0) / clkTck.toDouble()
+                        appPerCorePct[c] = Math.round(((coreMs / dWall) * 100.0).coerceIn(0.0, 100.0) * 10.0) / 10.0
+                    }
+                }
+                prevTaskTicks = nextTaskTicks
+            } catch (_: Exception) {
+                // Ignore if /proc/self/task scan fails
             }
 
-            val cpuTempC = readCpuTempC(context)
-            val fresh = DeviceTelemetry(batteryPowerW, isCharging, batteryTempC, cpuTempC)
-            cachedTelemetry = fresh
-            cachedTelemetryAtMs = now
-            return fresh
+            // Try system-wide /proc/stat (total + cpu0..cpuN) when permitted
+            var sysTotalPct = -1.0
+            val sysPerCorePct = DoubleArray(cores) { -1.0 }
+            try {
+                if (prevSysPerCoreTotal.size != cores) {
+                    prevSysPerCoreTotal = LongArray(cores) { -1L }
+                    prevSysPerCoreIdle = LongArray(cores) { -1L }
+                }
+                File("/proc/stat").bufferedReader().use { reader ->
+                    while (true) {
+                        val line = reader.readLine() ?: break
+                        if (!line.startsWith("cpu")) break
+                        val parts = line.trim().split(WHITESPACE_REGEX)
+                        if (parts.size < 5) continue
+                        val user = parts[1].toLongOrNull() ?: 0L
+                        val nice = parts[2].toLongOrNull() ?: 0L
+                        val system = parts[3].toLongOrNull() ?: 0L
+                        val idle = parts[4].toLongOrNull() ?: 0L
+                        val iowait = parts.getOrNull(5)?.toLongOrNull() ?: 0L
+                        val irq = parts.getOrNull(6)?.toLongOrNull() ?: 0L
+                        val softirq = parts.getOrNull(7)?.toLongOrNull() ?: 0L
+                        val steal = parts.getOrNull(8)?.toLongOrNull() ?: 0L
+                        val idleAll = idle + iowait
+                        val total = user + nice + system + idleAll + irq + softirq + steal
+
+                        if (parts[0] == "cpu") {
+                            val prevTotal = prevSysTotalCpu
+                            val prevIdle = prevSysIdleCpu
+                            if (prevTotal > 0L && total > prevTotal && idleAll >= prevIdle) {
+                                val dTotal = total - prevTotal
+                                val dIdle = (idleAll - prevIdle).coerceAtLeast(0L)
+                                val activeRatio = (dTotal - dIdle).coerceAtLeast(0L).toDouble() / dTotal.toDouble()
+                                sysTotalPct = Math.round((activeRatio * 100.0).coerceIn(0.0, 100.0) * 10.0) / 10.0
+                            }
+                            prevSysTotalCpu = total
+                            prevSysIdleCpu = idleAll
+                        } else {
+                            val coreIdx = parts[0].removePrefix("cpu").toIntOrNull()
+                            if (coreIdx != null && coreIdx in 0 until cores) {
+                                val prevTotal = prevSysPerCoreTotal[coreIdx]
+                                val prevIdle = prevSysPerCoreIdle[coreIdx]
+                                if (prevTotal > 0L && total > prevTotal && idleAll >= prevIdle) {
+                                    val dTotal = total - prevTotal
+                                    val dIdle = (idleAll - prevIdle).coerceAtLeast(0L)
+                                    val activeRatio = (dTotal - dIdle).coerceAtLeast(0L).toDouble() / dTotal.toDouble()
+                                    sysPerCorePct[coreIdx] = Math.round((activeRatio * 100.0).coerceIn(0.0, 100.0) * 10.0) / 10.0
+                                }
+                                prevSysPerCoreTotal[coreIdx] = total
+                                prevSysPerCoreIdle[coreIdx] = idleAll
+                            }
+                        }
+                    }
+                }
+            } catch (_: Exception) {
+                // Blocked by SELinux on Android 8+; per-thread fallback above handles this cleanly.
+            }
+
+            // Read per-core online state and cpufreq (accessible on Android 10 untrusted_app)
+            val onlineArr = BooleanArray(cores) { true }
+            val curMhzArr = IntArray(cores) { -1 }
+            val maxMhzArr = IntArray(cores) { -1 }
+            var minMaxMhz = Int.MAX_VALUE
+            var maxMaxMhz = 0
+            for (c in 0 until cores) {
+                val base = "/sys/devices/system/cpu/cpu$c"
+                val online = readIntFile("$base/online")
+                onlineArr[c] = (online == null || online != 0)
+                val curKhz = if (onlineArr[c]) readIntFile("$base/cpufreq/scaling_cur_freq") else null
+                val maxKhz = readIntFile("$base/cpufreq/cpuinfo_max_freq") ?: readIntFile("$base/cpufreq/scaling_max_freq")
+                if (curKhz != null && curKhz > 0) curMhzArr[c] = curKhz / 1000
+                if (maxKhz != null && maxKhz > 0) {
+                    val m = maxKhz / 1000
+                    maxMhzArr[c] = m
+                    if (m < minMaxMhz) minMaxMhz = m
+                    if (m > maxMaxMhz) maxMaxMhz = m
+                }
+            }
+
+            val useSystem = sysTotalPct >= 0.0
+            val coreList = ArrayList<CoreCpuTelemetry>(cores)
+            val freqThreshold = if (maxMaxMhz > minMaxMhz && minMaxMhz < Int.MAX_VALUE) (minMaxMhz + maxMaxMhz) / 2 else -1
+            for (c in 0 until cores) {
+                val pct = if (useSystem) sysPerCorePct[c] else appPerCorePct[c]
+                val cluster = when {
+                    freqThreshold <= 0 || maxMhzArr[c] <= 0 -> "cpu"
+                    maxMhzArr[c] >= freqThreshold -> "big"
+                    else -> "little"
+                }
+                coreList.add(
+                    CoreCpuTelemetry(
+                        core = c,
+                        online = onlineArr[c],
+                        usagePercent = if (onlineArr[c]) pct else 0.0,
+                        curFreqMhz = curMhzArr[c],
+                        maxFreqMhz = maxMhzArr[c],
+                        cluster = cluster
+                    )
+                )
+            }
+
+            return when {
+                useSystem -> CpuUsageSample(sysTotalPct, appCorePct, "system", coreList)
+                appTotalPct >= 0.0 -> CpuUsageSample(appTotalPct, appCorePct, "app", coreList)
+                else -> CpuUsageSample(-1.0, -1.0, "none", coreList)
+            }
+        }
+
+        private fun readGpuTelemetry(): GpuTelemetry {
+            var usagePct = -1.0
+            var curFreqMhz = -1
+            var maxFreqMhz = -1
+
+            // 1. Qualcomm Adreno (/sys/class/kgsl/kgsl-3d0)
+            try {
+                val busyFile = File("/sys/class/kgsl/kgsl-3d0/gpu_busy_percentage")
+                if (busyFile.canRead()) {
+                    val m = DIGITS_REGEX.find(busyFile.readText())
+                    val v = m?.value?.toDoubleOrNull()
+                    if (v != null) usagePct = v.coerceIn(0.0, 100.0)
+                }
+                readIntFile("/sys/class/kgsl/kgsl-3d0/clock_mhz")?.let { if (it > 0) curFreqMhz = it }
+                readIntFile("/sys/class/kgsl/kgsl-3d0/max_clock_mhz")?.let { if (it > 0) maxFreqMhz = it }
+            } catch (_: Exception) {}
+
+            // 2. ARM Mali / Devfreq (/sys/class/devfreq/gpufreq, /sys/class/misc/mali0)
+            if (usagePct < 0.0) {
+                for (path in listOf(
+                    "/sys/class/misc/mali0/device/utilization",
+                    "/sys/class/devfreq/gpufreq/load",
+                    "/sys/class/devfreq/gpufreq/utilization",
+                    "/sys/kernel/gpu/gpu_busy"
+                )) {
+                    try {
+                        val f = File(path)
+                        if (f.canRead()) {
+                            val m = DIGITS_REGEX.find(f.readText())
+                            val v = m?.value?.toDoubleOrNull()
+                            if (v != null) {
+                                usagePct = v.coerceIn(0.0, 100.0)
+                                break
+                            }
+                        }
+                    } catch (_: Exception) {}
+                }
+            }
+            if (curFreqMhz <= 0) {
+                val hz = readIntFile("/sys/class/devfreq/gpufreq/cur_freq")
+                    ?: readIntFile("/sys/kernel/gpu/gpu_clock")
+                if (hz != null && hz > 0) {
+                    curFreqMhz = if (hz > 10_000) hz / 1_000_000 else hz
+                }
+            }
+            if (maxFreqMhz <= 0) {
+                val hz = readIntFile("/sys/class/devfreq/gpufreq/max_freq")
+                if (hz != null && hz > 0) {
+                    maxFreqMhz = if (hz > 10_000) hz / 1_000_000 else hz
+                }
+            }
+
+            if (usagePct >= 0.0 || curFreqMhz > 0) {
+                return GpuTelemetry(
+                    available = true,
+                    usagePercent = if (usagePct >= 0.0) Math.round(usagePct * 10.0) / 10.0 else -1.0,
+                    curFreqMhz = curFreqMhz,
+                    maxFreqMhz = maxFreqMhz,
+                    note = ""
+                )
+            }
+
+            val gpuNodeExists = File("/sys/class/devfreq/gpufreq").exists() ||
+                File("/sys/class/misc/mali0").exists() ||
+                File("/sys/class/kgsl/kgsl-3d0").exists()
+            return GpuTelemetry(
+                available = false,
+                usagePercent = -1.0,
+                curFreqMhz = -1,
+                maxFreqMhz = -1,
+                note = if (gpuNodeExists) "受系统 SELinux 权限限制无法读取" else "设备未暴露 GPU 节点"
+            )
         }
 
         private fun readCpuTempC(context: Context): Double {

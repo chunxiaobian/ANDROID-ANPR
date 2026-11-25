@@ -468,12 +468,18 @@
 
     .timeline-canvas {
       width: 100%;
-      height: 68px;
+      height: 72px;
       display: block;
       cursor: pointer;
       touch-action: none;
       border-radius: 4px;
       background: #090d16;
+    }
+
+    @media (max-width: 900px) {
+      .timeline-canvas {
+        height: 80px;
+      }
     }
 
     .timeline-tooltip {
@@ -693,6 +699,370 @@
       color: #94a3b8;
       background: #1e232e;
     }
+
+    /* ---- 实时事件日志 ---- */
+    .live-log-toolbar {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+    }
+
+    .live-log-list {
+      max-height: 190px;
+      overflow-y: auto;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11px;
+      line-height: 1.45;
+      background: #0b101b;
+      border: 1px solid #283244;
+      border-radius: 6px;
+      padding: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .live-log-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      word-break: break-word;
+      color: #cbd5e1;
+    }
+
+    .live-log-time {
+      color: #64748b;
+      flex-shrink: 0;
+    }
+
+    .live-log-tag {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 0 5px;
+      border-radius: 3px;
+      flex-shrink: 0;
+      line-height: 1.5;
+    }
+
+    .log-tag-ALPR { background: rgba(14, 165, 233, 0.22); color: #38bdf8; }
+    .log-tag-CAPTURE { background: rgba(245, 158, 11, 0.22); color: #fbbf24; }
+    .log-tag-TORCH { background: rgba(234, 179, 8, 0.22); color: #fde047; }
+    .log-tag-REC { background: rgba(34, 197, 94, 0.22); color: #4ade80; }
+    .log-tag-MOTION { background: rgba(168, 85, 247, 0.22); color: #c084fc; }
+    .log-tag-CAM { background: rgba(59, 130, 246, 0.22); color: #60a5fa; }
+    .log-tag-SYS { background: rgba(148, 163, 184, 0.18); color: #94a3b8; }
+
+    /* ---- 大图预览 Lightbox ---- */
+    .lightbox-stage {
+      flex: 1;
+      min-height: 0;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: auto;
+    }
+
+    #imageLightboxImg.fit-viewport {
+      width: 100%;
+      height: 100%;
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      border-radius: 6px;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.7);
+      display: block;
+    }
+
+    #imageLightboxImg.orig-size {
+      width: auto;
+      height: auto;
+      max-width: none;
+      max-height: none;
+      object-fit: none;
+      border-radius: 6px;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.7);
+      display: block;
+      margin: auto;
+    }
+
+    /* ---- 原生风格播放器控制层与伪全屏 ---- */
+    .pseudo-fullscreen {
+      position: fixed !important;
+      inset: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      height: 100dvh !important;
+      max-height: none !important;
+      min-height: 100dvh !important;
+      z-index: 9500 !important;
+      border: none !important;
+      border-radius: 0 !important;
+      background: #000 !important;
+    }
+
+    .player-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 20;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      pointer-events: none;
+      transition: opacity 0.22s ease;
+      opacity: 1;
+    }
+
+    #streamContainer .player-overlay {
+      z-index: 110;
+      justify-content: flex-end;
+    }
+
+    .player-overlay.overlay-hidden {
+      opacity: 0;
+    }
+
+    .player-overlay.overlay-hidden * {
+      pointer-events: none !important;
+    }
+
+    .player-top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 10px 14px;
+      background: linear-gradient(to bottom, rgba(0, 0, 0, 0.75), rgba(0, 0, 0, 0));
+      pointer-events: auto;
+    }
+
+    .player-center-controls {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      pointer-events: none;
+    }
+
+    .player-circle-btn {
+      pointer-events: auto;
+      min-width: 44px;
+      height: 44px;
+      padding: 0 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      background: rgba(15, 23, 42, 0.68);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+    }
+
+    .player-circle-btn.play-main {
+      width: 56px;
+      height: 56px;
+      font-size: 20px;
+      border-color: rgba(56, 189, 248, 0.65);
+    }
+
+    .player-circle-btn:active {
+      transform: scale(0.94);
+    }
+
+    .player-bottom-bar {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 18px 12px 10px;
+      background: linear-gradient(to top, rgba(0, 0, 0, 0.84) 0%, rgba(0, 0, 0, 0.48) 65%, rgba(0, 0, 0, 0) 100%);
+      pointer-events: auto;
+    }
+
+    .player-seek-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+    }
+
+    .player-seek-row input[type=range] {
+      flex: 1;
+      margin: 0;
+      height: 6px;
+      accent-color: #38bdf8;
+      cursor: pointer;
+    }
+
+    .player-time-lbl {
+      font-family: monospace;
+      font-size: 11px;
+      color: #e2e8f0;
+      flex-shrink: 0;
+      min-width: 40px;
+      text-align: center;
+    }
+
+    .player-btn-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .player-btn-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .player-icon-btn {
+      background: rgba(30, 41, 59, 0.72);
+      color: #f8fafc;
+      border: 1px solid rgba(148, 163, 184, 0.38);
+      border-radius: 6px;
+      padding: 5px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      line-height: 1.2;
+    }
+
+    .player-icon-btn:hover {
+      background: rgba(51, 65, 85, 0.85);
+    }
+
+    .player-icon-btn.active {
+      background: rgba(14, 165, 233, 0.45);
+      border-color: #38bdf8;
+    }
+
+    .player-seek-toast {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 25;
+      pointer-events: none;
+      background: rgba(15, 23, 42, 0.86);
+      border: 1px solid rgba(56, 189, 248, 0.55);
+      color: #f8fafc;
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 700;
+      display: none;
+    }
+
+    /* ---- CPU 各核心与 GPU 下拉面板 ---- */
+    .cpu-gpu-dropdown {
+      position: absolute;
+      top: 52px;
+      right: 15px;
+      width: 296px;
+      max-width: calc(100vw - 30px);
+      max-height: 70vh;
+      overflow-y: auto;
+      z-index: 120;
+      background: rgba(15, 23, 42, 0.94);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(148, 163, 184, 0.28);
+      border-radius: 12px;
+      padding: 10px 12px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.65);
+      font-size: 12px;
+      color: #e2e8f0;
+    }
+
+    .cpu-gpu-dd-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding-bottom: 6px;
+      margin-bottom: 8px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+      font-weight: 700;
+    }
+
+    .core-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 5px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11px;
+    }
+
+    .core-name {
+      width: 40px;
+      flex-shrink: 0;
+      color: #cbd5e1;
+      font-weight: 600;
+    }
+
+    .core-cluster-badge {
+      font-size: 10px;
+      padding: 0 4px;
+      border-radius: 3px;
+      flex-shrink: 0;
+      line-height: 1.5;
+    }
+
+    .core-cluster-big {
+      background: rgba(245, 158, 11, 0.22);
+      color: #fbbf24;
+    }
+
+    .core-cluster-little {
+      background: rgba(56, 189, 248, 0.2);
+      color: #7dd3fc;
+    }
+
+    .core-bar-wrap {
+      flex: 1;
+      height: 7px;
+      background: rgba(30, 41, 59, 0.9);
+      border-radius: 4px;
+      overflow: hidden;
+      min-width: 42px;
+    }
+
+    .core-bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.25s ease;
+    }
+
+    .core-pct {
+      width: 38px;
+      text-align: right;
+      flex-shrink: 0;
+      font-weight: 700;
+    }
+
+    .core-freq {
+      width: 68px;
+      text-align: right;
+      flex-shrink: 0;
+      color: #94a3b8;
+      font-size: 10px;
+    }
+
+    .gpu-section {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(148, 163, 184, 0.2);
+    }
   </style>
 </head>
 
@@ -725,11 +1095,29 @@
         <span id="batteryPowerStatus" title="电池输出功耗" style="display: none;">⚡ --W</span>
         <span id="batteryTempStatus" title="电池温度" style="display: none;">🌡️ --°C</span>
         <span id="cpuTempStatus" title="CPU 温度" style="display: none;">🖥️ --°C</span>
+        <span id="cpuUsageStatus" title="点击查看各核心 CPU 与 GPU 详情" style="display: none; pointer-events: auto; cursor: pointer;">💻 --% ▾</span>
       </div>
+      <div id="cpuGpuDropdown" class="cpu-gpu-dropdown" style="display: none;"></div>
       <div id="streamLoading" class="stream-loading" data-i18n="loading">加载中...</div>
       <canvas id='streamCanvas'></canvas>
       <canvas id='alprOverlayCanvas' style='position:absolute; inset:0; pointer-events:none; z-index:5;'></canvas>
       <audio id="audioEl" preload="none" muted></audio>
+      <div id="livePlayerOverlay" class="player-overlay overlay-hidden">
+        <div class="player-bottom-bar">
+          <div class="player-btn-row">
+            <div class="player-btn-group">
+              <button id="liveOverlayMuteBtn" type="button" class="player-icon-btn">🔇 静音</button>
+              <button id="liveOverlayFlashBtn" type="button" class="player-icon-btn" style="display:none;">💡 闪光灯</button>
+              <button id="liveOverlaySnapBtn" type="button" class="player-icon-btn">📸 抓拍</button>
+              <button id="liveOverlayRecBtn" type="button" class="player-icon-btn">🔴 录像</button>
+            </div>
+            <div class="player-btn-group">
+              <button id="liveOverlayViewBtn" type="button" class="player-icon-btn">适应/原始</button>
+              <button id="liveOverlayFsBtn" type="button" class="player-icon-btn">⛶ 全屏</button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class='controls-panel loading' id='controlsPanel'>
@@ -959,6 +1347,29 @@
         </div>
         <div id="alpr-extra-cards"></div>
 
+        <details class="ctrl-accordion" id="liveLogAccordion" open style="margin-bottom: 14px;">
+          <summary>
+            <span>📋 实时事件日志</span>
+            <span id="liveLogBadge" class="val-badge" style="float:none;font-size:11px;margin-right:8px;">0</span>
+          </summary>
+          <div class="ctrl-acc-body">
+            <div class="live-log-toolbar">
+              <select id="liveLogFilter" style="width:auto;min-width:110px;margin:0;padding:4px 8px;font-size:12px;">
+                <option value="all">全部事件</option>
+                <option value="ALPR">车牌识别</option>
+                <option value="CAPTURE">抓拍 / 灯光</option>
+                <option value="REC">录像存储</option>
+                <option value="SYS">系统 / 相机</option>
+              </select>
+              <button id="liveLogAutoScrollBtn" type="button" class="btn active" style="margin:0;padding:4px 9px;font-size:11px;">⬇ 跟随</button>
+              <button id="liveLogClearBtn" type="button" class="btn" style="margin:0;padding:4px 9px;font-size:11px;">清空</button>
+            </div>
+            <div id="liveEventLogList" class="live-log-list">
+              <div style="color:#64748b;text-align:center;padding:10px 0;">暂无事件日志</div>
+            </div>
+          </div>
+        </details>
+
         <div class='setting-group'>
           <h3 data-i18n="settingsTitle" style="margin-bottom: 10px;">控制面板（点击展开，防误触）</h3>
 
@@ -1184,23 +1595,52 @@
         <video id="playbackVideoA" playsinline preload="auto"></video>
         <video id="playbackVideoB" playsinline preload="auto" style="opacity:0;pointer-events:none;"></video>
         <canvas id="playbackOverlayCanvas" style="position:absolute;inset:0;pointer-events:none;z-index:5;"></canvas>
+        <div id="pbSeekToast" class="player-seek-toast"></div>
+        <div id="pbPlayerOverlay" class="player-overlay">
+          <div class="player-top-bar">
+            <div style="display:flex;align-items:center;gap:10px;min-width:0;flex:1;">
+              <span id="pbFsClock" style="font-family:monospace;font-size:12px;color:#38bdf8;font-weight:700;flex-shrink:0;">--:--:--</span>
+              <span id="pbFsTitle" style="font-size:12px;color:#e2e8f0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">过车回放</span>
+            </div>
+            <button id="pbFsExitBtn" type="button" class="player-icon-btn" style="display:none;">✕ 退出全屏</button>
+          </div>
+          <div class="player-center-controls">
+            <button id="pbCenterBack10" type="button" class="player-circle-btn" title="后退 10 秒">-10s</button>
+            <button id="pbCenterPlayBtn" type="button" class="player-circle-btn play-main" title="播放 / 暂停">▶</button>
+            <button id="pbCenterFwd10" type="button" class="player-circle-btn" title="前进 10 秒">+10s</button>
+          </div>
+          <div class="player-bottom-bar">
+            <div class="player-seek-row">
+              <span id="pbSegCurTime" class="player-time-lbl">00:00</span>
+              <input id="pbSegSeekBar" type="range" min="0" max="1000" step="1" value="0">
+              <span id="pbSegDurTime" class="player-time-lbl">00:00</span>
+            </div>
+            <div class="player-btn-row">
+              <div class="player-btn-group">
+                <button id="pbPlayPauseBtn" type="button" class="player-icon-btn" data-i18n="pbPlay">▶ 播放</button>
+                <button id="pbBack5Btn" type="button" class="player-icon-btn">-5s</button>
+                <button id="pbFwd5Btn" type="button" class="player-icon-btn">+5s</button>
+                <button id="pbMuteBtn" type="button" class="player-icon-btn">🔊 声音</button>
+                <button id="pbBoxToggleBtn" type="button" class="player-icon-btn active" title="显示或隐藏回放画面车牌框">🟩 车牌框</button>
+              </div>
+              <div class="player-btn-group">
+                <select id="pbSpeedSelect" class="player-icon-btn" style="width:auto;margin:0;padding:4px 8px;">
+                  <option value="1">1.0x</option>
+                  <option value="2">2.0x</option>
+                  <option value="4">4.0x</option>
+                </select>
+                <button id="pbFullscreenBtn" type="button" class="player-icon-btn" data-i18n="btnFullscreen">⛶ 全屏</button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="timeline-panel">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
-          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-            <button id="pbPlayPauseBtn" type="button" class="btn btn-action" style="width:auto;margin:0;padding:4px 12px;">▶ 播放</button>
-            <button id="pbBack10Btn" type="button" class="btn" style="margin:0;padding:4px 9px;">-10s</button>
-            <button id="pbBack5Btn" type="button" class="btn" style="margin:0;padding:4px 9px;">-5s</button>
-            <button id="pbFwd5Btn" type="button" class="btn" style="margin:0;padding:4px 9px;">+5s</button>
-            <button id="pbFwd10Btn" type="button" class="btn" style="margin:0;padding:4px 9px;">+10s</button>
-            <select id="pbSpeedSelect" class="camera-select" style="width:auto;margin:0;padding:4px 8px;">
-              <option value="1">1.0x</option>
-              <option value="2">2.0x</option>
-              <option value="4">4.0x</option>
-            </select>
-            <button id="pbFullscreenBtn" type="button" class="btn" style="margin:0;padding:4px 9px;" data-i18n="btnFullscreen">⛶ 全屏</button>
-            <span id="playbackClockText" style="font-family:monospace;font-size:14px;font-weight:700;color:#38bdf8;margin-left:4px;">--:--:--</span>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span id="playbackClockText" style="font-family:monospace;font-size:14px;font-weight:700;color:#38bdf8;">--:--:--</span>
+            <a id="playbackDownloadLink" href="#" class="btn" style="display:none;margin:0;padding:3px 9px;font-size:11px;text-decoration:none;" data-i18n="pbDownload">下载当前段</a>
           </div>
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
             <span style="font-size:11px;color:#94a3b8;" data-i18n="pbDateLabel">日期:</span>
@@ -1237,7 +1677,7 @@
             <button id="tlZoomPm" type="button" class="btn" style="margin:0;padding:3px 8px;font-size:11px;" data-i18n="tlZoomPm">下午</button>
             <button id="tlZoom1h" type="button" class="btn" style="margin:0;padding:3px 8px;font-size:11px;" data-i18n="tlZoom1h">1小时</button>
             <button id="tlZoom15m" type="button" class="btn" style="margin:0;padding:3px 8px;font-size:11px;" data-i18n="tlZoom15m">15分钟</button>
-            <a id="playbackDownloadLink" href="#" class="btn" style="display:none;margin:0;padding:3px 9px;font-size:11px;text-decoration:none;" data-i18n="pbDownload">下载当前段</a>
+            <button id="tlCenterNowBtn" type="button" class="btn" style="margin:0;padding:3px 8px;font-size:11px;" title="回到当前指针">🎯 定位当前</button>
           </div>
         </div>
         <canvas id="playbackTimelineCanvas" class="timeline-canvas"></canvas>
@@ -1250,7 +1690,7 @@
           <span id="playbackSnapTitle" data-i18n="pbSnapTitle">全景抓拍</span>
           <button id="playbackSnapClose" type="button" class="btn" style="padding:2px 8px;font-size:11px;" data-i18n="pbSnapClose">收起</button>
         </div>
-        <img id="playbackFullSnap" alt="全景抓拍" title="点击查看大图" style="max-width:100%;max-height:220px;border-radius:6px;display:block;margin:0 auto;cursor:zoom-in;">
+        <img id="playbackFullSnap" alt="全景抓拍" title="点击查看大图" style="width:100%;max-height:240px;object-fit:contain;border-radius:6px;display:block;margin:0 auto;cursor:zoom-in;">
       </div>
     </div>
 
@@ -1292,6 +1732,7 @@
         </div>
       </div>
 
+      <button id="pbNewEventsBanner" type="button" class="btn" style="display:none;margin:8px 10px 0 10px;padding:6px 10px;font-size:12px;background:#0c4a6e;border-color:#38bdf8;color:#e0f2fe;">🆕 有 0 条新过车记录 · 点击加载</button>
       <div id="eventList" class="playback-event-list">
         <div style="color:#64748b;text-align:center;padding:24px 0;" data-i18n="eventsAutoLoad">切换到此页面后自动加载过车记录…</div>
       </div>
@@ -1359,12 +1800,18 @@
     </div>
   </div>
 
-  <div id="imageLightbox" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(5,7,11,0.92);align-items:center;justify-content:center;flex-direction:column;padding:16px;">
-    <div style="width:100%;max-width:1100px;display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;color:#e2e8f0;">
-      <span id="imageLightboxCaption" style="font-size:14px;font-weight:600;"></span>
-      <button id="imageLightboxClose" type="button" class="btn" style="padding:4px 12px;font-size:13px;">✕ 关闭</button>
+  <div id="imageLightbox" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(5,7,11,0.94);align-items:center;justify-content:center;flex-direction:column;padding:10px 12px;box-sizing:border-box;">
+    <div style="width:100%;display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;color:#e2e8f0;flex-wrap:wrap;flex-shrink:0;">
+      <span id="imageLightboxCaption" style="font-size:13px;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+        <button id="imageLightboxSwitchBtn" type="button" class="btn" style="display:none;padding:4px 10px;font-size:12px;">🖼 查看全景</button>
+        <button id="imageLightboxScaleBtn" type="button" class="btn" style="padding:4px 10px;font-size:12px;">🔍 原始尺寸</button>
+        <button id="imageLightboxClose" type="button" class="btn" style="padding:4px 12px;font-size:13px;">✕ 关闭</button>
+      </div>
     </div>
-    <img id="imageLightboxImg" alt="大图预览" style="max-width:94vw;max-height:84vh;object-fit:contain;border-radius:8px;box-shadow:0 12px 40px rgba(0,0,0,0.7);">
+    <div id="imageLightboxStage" class="lightbox-stage">
+      <img id="imageLightboxImg" class="fit-viewport" alt="大图预览">
+    </div>
   </div>
 
   <script>
@@ -1750,8 +2197,127 @@
     let deviceHasFlash = false;
     let cameraList = [];
 
+    function getFullscreenElementCompat() {
+      return document.fullscreenElement || document.webkitFullscreenElement || document.querySelector('.pseudo-fullscreen');
+    }
+
     function isFullscreenActive() {
-      return !!(document.fullscreenElement || document.webkitFullscreenElement);
+      return !!getFullscreenElementCompat();
+    }
+
+    function lockLandscapeOrientation() {
+      try {
+        if (screen.orientation && typeof screen.orientation.lock === 'function') {
+          const p = screen.orientation.lock('landscape');
+          if (p && typeof p.catch === 'function') p.catch(() => {});
+        }
+      } catch (_) {}
+    }
+
+    function unlockScreenOrientation() {
+      try {
+        if (screen.orientation && typeof screen.orientation.unlock === 'function') {
+          screen.orientation.unlock();
+        }
+      } catch (_) {}
+    }
+
+    function enterLandscapeFullscreen(el) {
+      if (!el) return;
+      const req = el.requestFullscreen || el.webkitRequestFullscreen;
+      if (typeof req === 'function') {
+        try {
+          const ret = req.call(el);
+          if (ret && typeof ret.then === 'function') {
+            ret.then(() => {
+              lockLandscapeOrientation();
+              syncFullscreenOverlayUi();
+            }).catch(() => {
+              el.classList.add('pseudo-fullscreen');
+              lockLandscapeOrientation();
+              syncFullscreenOverlayUi();
+              onFullscreenChange();
+            });
+          } else {
+            lockLandscapeOrientation();
+            syncFullscreenOverlayUi();
+          }
+          return;
+        } catch (_) {}
+      }
+      el.classList.add('pseudo-fullscreen');
+      lockLandscapeOrientation();
+      syncFullscreenOverlayUi();
+      onFullscreenChange();
+    }
+
+    function exitLandscapeFullscreen() {
+      const nativeFs = document.fullscreenElement || document.webkitFullscreenElement;
+      if (nativeFs) {
+        const exitFn = document.exitFullscreen || document.webkitExitFullscreen;
+        if (typeof exitFn === 'function') {
+          try {
+            const ret = exitFn.call(document);
+            if (ret && typeof ret.catch === 'function') ret.catch(() => {});
+          } catch (_) {}
+        }
+      }
+      document.querySelectorAll('.pseudo-fullscreen').forEach(node => node.classList.remove('pseudo-fullscreen'));
+      unlockScreenOrientation();
+      syncFullscreenOverlayUi();
+      onFullscreenChange();
+    }
+
+    function toggleContainerFullscreen(el) {
+      if (!el) return;
+      const cur = getFullscreenElementCompat();
+      if (cur === el) {
+        exitLandscapeFullscreen();
+      } else if (cur) {
+        exitLandscapeFullscreen();
+        setTimeout(() => enterLandscapeFullscreen(el), 60);
+      } else {
+        enterLandscapeFullscreen(el);
+      }
+    }
+
+    function syncLiveOverlayButtons() {
+      const muteOvr = getElById('liveOverlayMuteBtn');
+      if (muteOvr) {
+        muteOvr.textContent = audioEl.muted ? '🔇 静音' : '🔊 声音';
+        muteOvr.classList.toggle('active', !audioEl.muted);
+      }
+      const flashOvr = getElById('liveOverlayFlashBtn');
+      const flashBtnEl = getElById('flashBtn');
+      if (flashOvr) {
+        const visible = flashBtnEl ? flashBtnEl.style.display !== 'none' : (deviceHasFlash || torchState === 'on');
+        flashOvr.style.display = visible ? 'inline-block' : 'none';
+        flashOvr.textContent = torchState === 'on' ? '🔦 关灯' : '💡 闪光灯';
+        flashOvr.classList.toggle('active', torchState === 'on');
+      }
+      const viewOvr = getElById('liveOverlayViewBtn');
+      if (viewOvr) {
+        viewOvr.textContent = viewMode === 'fit' ? '适应屏幕' : '原始大小';
+      }
+      const fsOvr = getElById('liveOverlayFsBtn');
+      const fsActive = getFullscreenElementCompat() === streamContainer;
+      if (fsOvr) {
+        fsOvr.textContent = fsActive ? '✕ 退出全屏' : '⛶ 全屏';
+        fsOvr.classList.toggle('active', fsActive);
+      }
+    }
+
+    function syncFullscreenOverlayUi() {
+      syncLiveOverlayButtons();
+      const pbWrapEl = getElById('playbackVideoWrap');
+      const pbFsActive = !!(pbWrapEl && getFullscreenElementCompat() === pbWrapEl);
+      const pbExit = getElById('pbFsExitBtn');
+      const pbFs = getElById('pbFullscreenBtn');
+      if (pbExit) pbExit.style.display = pbFsActive ? 'inline-block' : 'none';
+      if (pbFs) {
+        pbFs.textContent = pbFsActive ? '🗗 退出' : t('btnFullscreen');
+        pbFs.classList.toggle('active', pbFsActive);
+      }
     }
 
     function targetCanvasSize(frame) {
@@ -1798,6 +2364,7 @@
       audioControls.style.display = audioEl.muted
         ? 'none'
         : 'block';
+      syncLiveOverlayButtons();
     }
     languageChangeListeners.push(updateMuteButton);
 
@@ -1820,6 +2387,7 @@
           ? t('flashOff')
           : t('flashOn');
       }
+      syncLiveOverlayButtons();
     }
     languageChangeListeners.push(updateFlashButton);
 
@@ -2682,29 +3250,19 @@
         o.className = 'btn active';
         viewMode = 'original';
       }
+      syncLiveOverlayButtons();
       applyCanvasSize(targetCanvasSize(lastDrawn));
     }
 
     function toggleFullscreen() {
-      const container = streamContainer;
-      if (!container) return;
-
-      if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-        if (container.requestFullscreen) {
-          container.requestFullscreen();
-        } else if (container.webkitRequestFullscreen) {
-          container.webkitRequestFullscreen();
-        }
-      } else {
-        if (document.exitFullscreen) {
-          document.exitFullscreen();
-        } else if (document.webkitExitFullscreen) {
-          document.webkitExitFullscreen();
-        }
-      }
+      toggleContainerFullscreen(streamContainer);
     }
 
     function onFullscreenChange() {
+      if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.querySelector('.pseudo-fullscreen')) {
+        unlockScreenOrientation();
+      }
+      syncFullscreenOverlayUi();
       requestAnimationFrame(() => {
         applyCanvasSize(targetCanvasSize(lastDrawn));
       });
@@ -2712,11 +3270,80 @@
 
     document.addEventListener('fullscreenchange', onFullscreenChange);
     document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+    window.addEventListener('orientationchange', () => {
+      setTimeout(() => {
+        onFullscreenChange();
+      }, 150);
+    });
     window.addEventListener('resize', () => {
-      if (document.fullscreenElement || document.webkitFullscreenElement) {
+      if (isFullscreenActive()) {
         applyCanvasSize(targetCanvasSize(lastDrawn));
       }
     });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && document.querySelector('.pseudo-fullscreen')) {
+        exitLandscapeFullscreen();
+      }
+    });
+
+    (function initLivePlayerOverlay() {
+      const ovr = getElById('livePlayerOverlay');
+      if (!streamContainer || !ovr) return;
+      let hideTimer = null;
+      let lastTouchAt = 0;
+
+      const scheduleHide = () => {
+        if (hideTimer) clearTimeout(hideTimer);
+        hideTimer = setTimeout(() => {
+          ovr.classList.add('overlay-hidden');
+        }, 3500);
+      };
+      const showOvr = () => {
+        ovr.classList.remove('overlay-hidden');
+        scheduleHide();
+      };
+
+      streamContainer.addEventListener('mousemove', () => {
+        if (Date.now() - lastTouchAt < 500) return;
+        showOvr();
+      });
+      streamContainer.addEventListener('mouseleave', () => {
+        if (hideTimer) clearTimeout(hideTimer);
+        ovr.classList.add('overlay-hidden');
+      });
+      streamContainer.addEventListener('click', (e) => {
+        if (e.target && e.target.closest('.player-bottom-bar')) return;
+        if (ovr.classList.contains('overlay-hidden')) showOvr();
+        else {
+          if (hideTimer) clearTimeout(hideTimer);
+          ovr.classList.add('overlay-hidden');
+        }
+      });
+      streamContainer.addEventListener('touchend', () => {
+        lastTouchAt = Date.now();
+      }, { passive: true });
+      streamContainer.addEventListener('dblclick', (e) => {
+        if (e.target && e.target.closest('.player-bottom-bar')) return;
+        toggleFullscreen();
+      });
+
+      const bindBtn = (id, fn) => {
+        const el = getElById(id);
+        if (!el) return;
+        el.addEventListener('click', (e) => {
+          e.stopPropagation();
+          showOvr();
+          fn();
+        });
+      };
+      bindBtn('liveOverlayMuteBtn', () => { if (muteBtn) muteBtn.click(); });
+      bindBtn('liveOverlayFlashBtn', () => { if (flashBtn) flashBtn.click(); });
+      bindBtn('liveOverlaySnapBtn', () => { takeSnapshot(); });
+      bindBtn('liveOverlayRecBtn', () => { toggleRecording(); });
+      bindBtn('liveOverlayViewBtn', () => { setView(viewMode === 'fit' ? 'original' : 'fit'); });
+      bindBtn('liveOverlayFsBtn', () => { toggleFullscreen(); });
+      syncLiveOverlayButtons();
+    })();
 
     function applyStreamSettings(settings) {
       if (!settings) return;
@@ -2927,6 +3554,7 @@
       const powerEl = getElById('batteryPowerStatus');
       const batTempEl = getElById('batteryTempStatus');
       const cpuTempEl = getElById('cpuTempStatus');
+      const cpuUsageEl = getElById('cpuUsageStatus');
       const overlay = getElById('statusOverlay');
 
       if (batteryEl && typeof data.batteryPercent === 'number') {
@@ -2983,15 +3611,135 @@
         }
       }
 
+      if (cpuUsageEl && typeof data.cpuUsagePercent === 'number') {
+        if (data.cpuUsagePercent < 0) {
+          cpuUsageEl.style.display = 'none';
+        } else {
+          cpuUsageEl.style.display = 'flex';
+          const scopeLabel = data.cpuUsageScope === 'system' ? '整机' : '本应用';
+          const appCoreText = (typeof data.appCpuCorePercent === 'number' && data.appCpuCorePercent >= 0)
+            ? ` (单核等效 ${data.appCpuCorePercent.toFixed(0)}%)`
+            : '';
+          cpuUsageEl.title = `CPU 占用率 [${scopeLabel}]${appCoreText} · 点击查看各核心与 GPU`;
+          cpuUsageEl.style.color = data.cpuUsagePercent >= 80
+            ? '#f87171'
+            : (data.cpuUsagePercent >= 50 ? '#fbbf24' : '#4ade80');
+          const ddOpen = window.__cpuGpuDropdownOpen === true;
+          cpuUsageEl.innerHTML = `💻 ${data.cpuUsagePercent.toFixed(0)}% ${ddOpen ? '▴' : '▾'}`;
+        }
+      }
+
+      if (Array.isArray(data.cpuCores) || data.gpu) {
+        window.__lastCpuGpuData = data;
+        if (window.__cpuGpuDropdownOpen && typeof window.renderCpuGpuDropdown === 'function') {
+          window.renderCpuGpuDropdown(data);
+        }
+      }
+
       if (overlay) {
         const hasStatus = (batteryEl && batteryEl.style.display !== 'none') ||
           (wifiEl && wifiEl.style.display !== 'none') ||
           (powerEl && powerEl.style.display !== 'none') ||
           (batTempEl && batTempEl.style.display !== 'none') ||
-          (cpuTempEl && cpuTempEl.style.display !== 'none');
+          (cpuTempEl && cpuTempEl.style.display !== 'none') ||
+          (cpuUsageEl && cpuUsageEl.style.display !== 'none');
         overlay.style.display = hasStatus ? 'flex' : 'none';
       }
     }
+
+    (function initCpuGpuDropdown() {
+      const trigger = getElById('cpuUsageStatus');
+      const dropdown = getElById('cpuGpuDropdown');
+      if (!trigger || !dropdown) return;
+      window.__cpuGpuDropdownOpen = false;
+
+      const pctColor = (pct) => pct >= 80 ? '#f87171' : (pct >= 50 ? '#fbbf24' : '#4ade80');
+
+      window.renderCpuGpuDropdown = (data) => {
+        if (!data) return;
+        const scopeText = data.cpuUsageScope === 'system' ? '整机各核占用' : '本应用各核占用 + 实时频率';
+        const eqText = (typeof data.appCpuCorePercent === 'number' && data.appCpuCorePercent >= 0)
+          ? `单核等效 ${data.appCpuCorePercent.toFixed(0)}%`
+          : '';
+        const cores = Array.isArray(data.cpuCores) ? data.cpuCores : [];
+
+        let html = `<div class="cpu-gpu-dd-head"><span>⚙️ ${scopeText}</span><span style="font-size:11px;color:#94a3b8;font-weight:500;">${eqText}</span></div>`;
+        if (!cores.length) {
+          html += '<div style="color:#94a3b8;font-size:11px;padding:4px 0;">正在采集核心数据…</div>';
+        } else {
+          for (const c of cores) {
+            const pct = (typeof c.usagePercent === 'number' && c.usagePercent >= 0) ? c.usagePercent : -1;
+            const barW = pct >= 0 ? Math.min(100, Math.max(0, pct)) : 0;
+            const color = pct >= 0 ? pctColor(pct) : '#475569';
+            const pctText = !c.online ? '离线' : (pct >= 0 ? `${pct.toFixed(0)}%` : '--%');
+            const freqText = !c.online
+              ? 'offline'
+              : (c.curFreqMhz > 0 ? `${c.curFreqMhz}/${c.maxFreqMhz > 0 ? c.maxFreqMhz : '?'}M` : '--');
+            const badge = c.cluster === 'big'
+              ? '<span class="core-cluster-badge core-cluster-big">大核</span>'
+              : (c.cluster === 'little' ? '<span class="core-cluster-badge core-cluster-little">小核</span>' : '');
+            html += `
+              <div class="core-row">
+                <span class="core-name">CPU${c.core}</span>
+                ${badge}
+                <div class="core-bar-wrap"><div class="core-bar-fill" style="width:${barW}%;background:${color};"></div></div>
+                <span class="core-pct" style="color:${color};">${pctText}</span>
+                <span class="core-freq" title="当前频率 / 最高频率 (MHz)">${freqText}</span>
+              </div>
+            `;
+          }
+        }
+
+        const gpu = data.gpu || {};
+        html += '<div class="gpu-section"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;font-weight:700;"><span>🎮 GPU 状态</span>';
+        if (gpu.available) {
+          const gFreq = gpu.curFreqMhz > 0 ? `${gpu.curFreqMhz}${gpu.maxFreqMhz > 0 ? '/' + gpu.maxFreqMhz : ''} MHz` : '';
+          html += `<span style="font-size:11px;color:#94a3b8;font-weight:500;">${gFreq}</span></div>`;
+          if (typeof gpu.usagePercent === 'number' && gpu.usagePercent >= 0) {
+            const gColor = pctColor(gpu.usagePercent);
+            html += `
+              <div class="core-row" style="margin-bottom:0;">
+                <span class="core-name">GPU</span>
+                <div class="core-bar-wrap"><div class="core-bar-fill" style="width:${Math.min(100, gpu.usagePercent)}%;background:${gColor};"></div></div>
+                <span class="core-pct" style="color:${gColor};">${gpu.usagePercent.toFixed(0)}%</span>
+              </div>
+            `;
+          } else {
+            html += '<div style="font-size:11px;color:#94a3b8;">仅获取到 GPU 频率，占用率节点不可读</div>';
+          }
+        } else {
+          const note = gpu.note || '当前设备未开放 GPU 节点';
+          html += '</div>';
+          html += `<div style="font-size:11px;color:#94a3b8;">${note}</div>`;
+        }
+        html += '</div>';
+        dropdown.innerHTML = html;
+      };
+
+      const toggleDropdown = (e) => {
+        e.stopPropagation();
+        window.__cpuGpuDropdownOpen = !window.__cpuGpuDropdownOpen;
+        dropdown.style.display = window.__cpuGpuDropdownOpen ? 'block' : 'none';
+        if (window.__cpuGpuDropdownOpen && window.__lastCpuGpuData) {
+          window.renderCpuGpuDropdown(window.__lastCpuGpuData);
+        }
+        if (trigger && window.__lastCpuGpuData && typeof window.__lastCpuGpuData.cpuUsagePercent === 'number' && window.__lastCpuGpuData.cpuUsagePercent >= 0) {
+          trigger.innerHTML = `💻 ${window.__lastCpuGpuData.cpuUsagePercent.toFixed(0)}% ${window.__cpuGpuDropdownOpen ? '▴' : '▾'}`;
+        }
+      };
+
+      trigger.addEventListener('click', toggleDropdown);
+      dropdown.addEventListener('click', (e) => e.stopPropagation());
+      document.addEventListener('click', (e) => {
+        if (window.__cpuGpuDropdownOpen && !dropdown.contains(e.target) && !trigger.contains(e.target)) {
+          window.__cpuGpuDropdownOpen = false;
+          dropdown.style.display = 'none';
+          if (trigger && window.__lastCpuGpuData && typeof window.__lastCpuGpuData.cpuUsagePercent === 'number' && window.__lastCpuGpuData.cpuUsagePercent >= 0) {
+            trigger.innerHTML = `💻 ${window.__lastCpuGpuData.cpuUsagePercent.toFixed(0)}% ▾`;
+          }
+        }
+      });
+    })();
 
     function loadDeviceInfo(applySettings) {
       return fetch('/info.json')
@@ -3034,6 +3782,7 @@
     let isRecording = false;
     function updateRecordingUi(statusData) {
       const toggleBtn = getElById('recordToggleBtn');
+      const liveRecOvr = getElById('liveOverlayRecBtn');
       isRecording = !!(statusData?.recording);
       if (isRecording) {
         const secs = Math.floor((statusData.durationMs || 0) / 1000);
@@ -3045,11 +3794,19 @@
           toggleBtn.style.background = '#d32f2f';
           toggleBtn.style.borderColor = '#b71c1c';
         }
+        if (liveRecOvr) {
+          liveRecOvr.textContent = `⏹ ${timeStr}`;
+          liveRecOvr.classList.add('active');
+        }
       } else {
         if (toggleBtn) {
           toggleBtn.textContent = t('btnRecord');
           toggleBtn.style.background = '';
           toggleBtn.style.borderColor = '';
+        }
+        if (liveRecOvr) {
+          liveRecOvr.textContent = '🔴 录像';
+          liveRecOvr.classList.remove('active');
         }
       }
     }
@@ -3639,6 +4396,160 @@
         .catch(() => {});
     }, 300);
 
+    // ---- 实时监控事件日志 ----
+    (function initLiveEventLog() {
+      const listEl = getElById('liveEventLogList');
+      const filterEl = getElById('liveLogFilter');
+      const autoScrollBtn = getElById('liveLogAutoScrollBtn');
+      const clearBtn = getElById('liveLogClearBtn');
+      const badgeEl = getElById('liveLogBadge');
+      if (!listEl) return;
+
+      let liveLogEntries = [];
+      let lastLogSeq = 0;
+      let autoScroll = true;
+      let isFetchingLogs = false;
+      let programmaticScroll = false;
+
+      const matchesFilter = (entry) => {
+        const f = filterEl ? filterEl.value : 'all';
+        if (!f || f === 'all') return true;
+        if (f === 'CAPTURE') return entry.tag === 'CAPTURE' || entry.tag === 'TORCH';
+        if (f === 'SYS') return entry.tag === 'SYS' || entry.tag === 'CAM' || entry.tag === 'MOTION';
+        return entry.tag === f;
+      };
+
+      const formatLogHms = (ms) => {
+        if (!ms) return '--:--:--';
+        const d = new Date(ms);
+        const pad = (n) => String(n).padStart(2, '0');
+        return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+      };
+
+      const buildLogRow = (entry) => {
+        const row = document.createElement('div');
+        row.className = 'live-log-row';
+        const timeSpan = document.createElement('span');
+        timeSpan.className = 'live-log-time';
+        timeSpan.textContent = formatLogHms(entry.timeMs);
+
+        const tagSpan = document.createElement('span');
+        const safeTag = ['ALPR', 'CAPTURE', 'TORCH', 'REC', 'MOTION', 'CAM', 'SYS'].includes(entry.tag) ? entry.tag : 'SYS';
+        tagSpan.className = `live-log-tag log-tag-${safeTag}`;
+        tagSpan.textContent = safeTag;
+
+        const msgSpan = document.createElement('span');
+        msgSpan.style.flex = '1';
+        if (entry.level === 'error') msgSpan.style.color = '#fca5a5';
+        else if (entry.level === 'warn') msgSpan.style.color = '#fde68a';
+        msgSpan.textContent = entry.message || '';
+
+        row.appendChild(timeSpan);
+        row.appendChild(tagSpan);
+        row.appendChild(msgSpan);
+        return row;
+      };
+
+      const scrollToBottomIfEnabled = () => {
+        if (!autoScroll) return;
+        programmaticScroll = true;
+        listEl.scrollTop = listEl.scrollHeight;
+        requestAnimationFrame(() => { programmaticScroll = false; });
+      };
+
+      const renderAllLogs = () => {
+        const visible = liveLogEntries.filter(matchesFilter);
+        if (badgeEl) badgeEl.textContent = String(liveLogEntries.length);
+        listEl.innerHTML = '';
+        if (!visible.length) {
+          listEl.innerHTML = '<div style="color:#64748b;text-align:center;padding:10px 0;">暂无事件日志</div>';
+          return;
+        }
+        const frag = document.createDocumentFragment();
+        for (const item of visible) frag.appendChild(buildLogRow(item));
+        listEl.appendChild(frag);
+        scrollToBottomIfEnabled();
+      };
+
+      const syncAutoScrollUi = () => {
+        if (!autoScrollBtn) return;
+        autoScrollBtn.classList.toggle('active', autoScroll);
+        autoScrollBtn.textContent = autoScroll ? '⬇ 跟随' : '⏸ 已暂停';
+      };
+
+      listEl.addEventListener('scroll', () => {
+        if (programmaticScroll) return;
+        const distFromBottom = listEl.scrollHeight - listEl.scrollTop - listEl.clientHeight;
+        if (distFromBottom > 24 && autoScroll) {
+          autoScroll = false;
+          syncAutoScrollUi();
+        } else if (distFromBottom <= 8 && !autoScroll) {
+          autoScroll = true;
+          syncAutoScrollUi();
+        }
+      });
+
+      if (filterEl) filterEl.addEventListener('change', renderAllLogs);
+      if (autoScrollBtn) {
+        autoScrollBtn.addEventListener('click', () => {
+          autoScroll = !autoScroll;
+          syncAutoScrollUi();
+          if (autoScroll) scrollToBottomIfEnabled();
+        });
+      }
+      if (clearBtn) {
+        clearBtn.addEventListener('click', () => {
+          liveLogEntries = [];
+          renderAllLogs();
+        });
+      }
+
+      const pollLogs = () => {
+        if (isPlaybackViewActive || isFetchingLogs) return;
+        isFetchingLogs = true;
+        fetch(`/api/logs?since=${encodeURIComponent(lastLogSeq)}&limit=100`, { credentials: 'include', cache: 'no-store' })
+          .then(r => r.json())
+          .then(data => {
+            if (!data) return;
+            if (typeof data.lastSeq === 'number' && data.lastSeq > lastLogSeq) {
+              lastLogSeq = data.lastSeq;
+            }
+            const added = Array.isArray(data.logs) ? data.logs : [];
+            if (!added.length) return;
+
+            const wasEmptyVisible = listEl.querySelectorAll('.live-log-row').length === 0;
+            let appendedAny = false;
+            const frag = document.createDocumentFragment();
+            for (const entry of added) {
+              liveLogEntries.push(entry);
+              if (matchesFilter(entry)) {
+                frag.appendChild(buildLogRow(entry));
+                appendedAny = true;
+              }
+            }
+            if (liveLogEntries.length > 200) {
+              liveLogEntries = liveLogEntries.slice(liveLogEntries.length - 200);
+            }
+            if (badgeEl) badgeEl.textContent = String(liveLogEntries.length);
+
+            if (appendedAny) {
+              if (wasEmptyVisible) listEl.innerHTML = '';
+              listEl.appendChild(frag);
+              while (listEl.children.length > 200) {
+                listEl.removeChild(listEl.firstElementChild);
+              }
+              scrollToBottomIfEnabled();
+            }
+          })
+          .catch(() => {})
+          .finally(() => { isFetchingLogs = false; });
+      };
+
+      syncAutoScrollUi();
+      pollLogs();
+      setInterval(pollLogs, 1500);
+    })();
+
     // ---- HyperLPR3 高级参数配置 ----
     (function initAlprAdvancedPanel() {
       const toggleBtn = getElById('alpr-adv-toggle');
@@ -4196,33 +5107,106 @@
       const videoA = getElById('playbackVideoA');
       const videoB = getElById('playbackVideoB');
       const pbOverlay = getElById('playbackOverlayCanvas');
+      const pbPlayerOverlay = getElById('pbPlayerOverlay');
+      const pbSeekToast = getElById('pbSeekToast');
+      const pbFsClock = getElById('pbFsClock');
+      const pbFsTitle = getElById('pbFsTitle');
+      const pbFsExitBtn = getElById('pbFsExitBtn');
+      const pbCenterBack10 = getElById('pbCenterBack10');
+      const pbCenterPlayBtn = getElById('pbCenterPlayBtn');
+      const pbCenterFwd10 = getElById('pbCenterFwd10');
+      const pbSegCurTime = getElById('pbSegCurTime');
+      const pbSegSeekBar = getElById('pbSegSeekBar');
+      const pbSegDurTime = getElById('pbSegDurTime');
       const playPauseBtn = getElById('pbPlayPauseBtn');
-      const back10Btn = getElById('pbBack10Btn');
       const back5Btn = getElById('pbBack5Btn');
       const fwd5Btn = getElById('pbFwd5Btn');
-      const fwd10Btn = getElById('pbFwd10Btn');
+      const pbMuteBtn = getElById('pbMuteBtn');
       const pbFullscreenBtn = getElById('pbFullscreenBtn');
       const speedSelect = getElById('pbSpeedSelect');
       const lightboxEl = getElById('imageLightbox');
+      const lightboxStage = getElById('imageLightboxStage');
       const lightboxImg = getElById('imageLightboxImg');
       const lightboxCaption = getElById('imageLightboxCaption');
+      const lightboxSwitchBtn = getElById('imageLightboxSwitchBtn');
+      const lightboxScaleBtn = getElById('imageLightboxScaleBtn');
       const lightboxClose = getElById('imageLightboxClose');
+      let lightboxPrimary = null;
+      let lightboxAlt = null;
+      let lightboxShowingAlt = false;
+      let lightboxOrigSize = false;
 
-      function openImageLightbox(src, caption) {
+      function applyLightboxScaleUi() {
+        if (!lightboxImg || !lightboxScaleBtn) return;
+        lightboxImg.classList.toggle('fit-viewport', !lightboxOrigSize);
+        lightboxImg.classList.toggle('orig-size', lightboxOrigSize);
+        lightboxScaleBtn.textContent = lightboxOrigSize ? '⛶ 适应屏幕' : '🔍 原始尺寸';
+      }
+
+      function applyLightboxSourceUi() {
+        if (!lightboxImg) return;
+        const cur = (lightboxShowingAlt && lightboxAlt) ? lightboxAlt : lightboxPrimary;
+        if (!cur) return;
+        lightboxImg.src = cur.src;
+        if (lightboxCaption) lightboxCaption.textContent = cur.caption || '';
+        if (lightboxSwitchBtn) {
+          if (lightboxAlt && lightboxAlt.src) {
+            lightboxSwitchBtn.style.display = 'inline-block';
+            lightboxSwitchBtn.textContent = lightboxShowingAlt
+              ? (lightboxPrimary?.switchLabel || '🔍 查看原图')
+              : (lightboxAlt.switchLabel || '🖼 查看全景');
+          } else {
+            lightboxSwitchBtn.style.display = 'none';
+          }
+        }
+      }
+
+      function openImageLightbox(src, caption, altOpts) {
         if (!lightboxEl || !lightboxImg || !src) return;
-        lightboxImg.src = src;
-        if (lightboxCaption) lightboxCaption.textContent = caption || '';
+        lightboxPrimary = {
+          src,
+          caption: caption || '',
+          switchLabel: altOpts?.backLabel || '🚘 查看车牌图'
+        };
+        lightboxAlt = (altOpts && altOpts.src)
+          ? {
+              src: altOpts.src,
+              caption: altOpts.caption || caption || '',
+              switchLabel: altOpts.label || '🖼 查看全景'
+            }
+          : null;
+        lightboxShowingAlt = false;
+        lightboxOrigSize = false;
+        applyLightboxScaleUi();
+        applyLightboxSourceUi();
         lightboxEl.style.display = 'flex';
       }
       function closeImageLightbox() {
         if (!lightboxEl || !lightboxImg) return;
         lightboxEl.style.display = 'none';
         lightboxImg.src = '';
+        lightboxPrimary = null;
+        lightboxAlt = null;
       }
       if (lightboxClose) lightboxClose.addEventListener('click', closeImageLightbox);
+      if (lightboxScaleBtn) {
+        lightboxScaleBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          lightboxOrigSize = !lightboxOrigSize;
+          applyLightboxScaleUi();
+        });
+      }
+      if (lightboxSwitchBtn) {
+        lightboxSwitchBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (!lightboxAlt) return;
+          lightboxShowingAlt = !lightboxShowingAlt;
+          applyLightboxSourceUi();
+        });
+      }
       if (lightboxEl) {
         lightboxEl.addEventListener('click', (e) => {
-          if (e.target === lightboxEl) closeImageLightbox();
+          if (e.target === lightboxEl || e.target === lightboxStage) closeImageLightbox();
         });
       }
       document.addEventListener('keydown', (e) => {
@@ -4245,10 +5229,12 @@
       const tlZoomPm = getElById('tlZoomPm');
       const tlZoom1h = getElById('tlZoom1h');
       const tlZoom15m = getElById('tlZoom15m');
+      const tlCenterNowBtn = getElById('tlCenterNowBtn');
       const tlCanvas = getElById('playbackTimelineCanvas');
       const tlTooltip = getElById('timelineTooltip');
       const nowInfoEl = getElById('playbackNowInfo');
       const downloadLink = getElById('playbackDownloadLink');
+      const newEventsBanner = getElById('pbNewEventsBanner');
 
       function downloadFileViaFetch(url, fileName, triggerEl) {
         if (!url || url === '#') return;
@@ -4314,11 +5300,17 @@
       let activeSlot = 0;       // 0 -> videoA, 1 -> videoB
       let preloadedSegIdx = -1;
       let playbackRate = 1;
-      let tlZoomMode = 'all';   // 'all' (24h) | 'am' (00-12) | 'pm' (12-24) | '1h' | '15m'
+      let tlZoomMode = 'all';   // 'all' (24h) | 'am' (00-12) | 'pm' (12-24) | '1h' | '15m' | 'custom'
       let tlZoomMs = 86_400_000;
+      let tlViewStartMs = 0;
+      let tlUserPanned = false;
+      let tlScrubPreviewMs = null;
+      let lastTlTouchAtMs = 0;
       let selectedDateStr = ''; // YYYY-MM-DD (local)
       let currentWallMs = 0;
       let isDraggingTl = false;
+      let isSeekingSegBar = false;
+      let pendingSilentEvents = null;
       let lastPbCardKey = null;
 
       function getActiveVideo() { return activeSlot === 0 ? videoA : videoB; }
@@ -4515,7 +5507,15 @@
               thumb.alt = ev.plateCode || 'plate';
               if (ev.plateImg) {
                 thumb.src = `/api/events/image?file=${encodeURIComponent(ev.plateImg)}`;
-                thumb.addEventListener('click', () => openImageLightbox(thumb.src, `${ev.plateCode || '--'} · ${formatTime(ev.eventTimeMs)}`));
+                const snapAlt = ev.snapImg
+                  ? {
+                      src: `/api/events/image?file=${encodeURIComponent(ev.snapImg)}`,
+                      caption: `${ev.plateCode || '--'} · ${formatTime(ev.eventTimeMs)} (全景)`,
+                      label: '🖼 查看全景',
+                      backLabel: '🚘 查看车牌图'
+                    }
+                  : null;
+                thumb.addEventListener('click', () => openImageLightbox(thumb.src, `${ev.plateCode || '--'} · ${formatTime(ev.eventTimeMs)}`, snapAlt));
               }
 
               const info = document.createElement('div');
@@ -4540,7 +5540,15 @@
                 snapBtn.style.cssText = 'margin:0;padding:3px 8px;font-size:11px;';
                 snapBtn.textContent = '🖼 全景';
                 snapBtn.addEventListener('click', () => {
-                  openImageLightbox(`/api/events/image?file=${encodeURIComponent(ev.snapImg)}`, `${ev.plateCode || '--'} · ${formatTime(ev.eventTimeMs)}`);
+                  const plateAlt = ev.plateImg
+                    ? {
+                        src: `/api/events/image?file=${encodeURIComponent(ev.plateImg)}`,
+                        caption: `${ev.plateCode || '--'} · ${formatTime(ev.eventTimeMs)} (车牌图)`,
+                        label: '🚘 查看车牌图',
+                        backLabel: '🖼 查看全景'
+                      }
+                    : null;
+                  openImageLightbox(`/api/events/image?file=${encodeURIComponent(ev.snapImg)}`, `${ev.plateCode || '--'} · ${formatTime(ev.eventTimeMs)}`, plateAlt);
                 });
                 actions.appendChild(snapBtn);
               }
@@ -4692,7 +5700,7 @@
           if (activeTabMode !== 'playback') return;
           loadSegmentsAndTimeline();
           if (typeof currentOffset === 'number' && currentOffset === 0 && typeof loadEvents === 'function') {
-            loadEvents();
+            loadEvents({ silent: true });
           }
         }, 10000);
       }
@@ -4704,6 +5712,7 @@
       }
       function switchTab(mode) {
         if (mode === activeTabMode) return;
+        if (isFullscreenActive()) exitLandscapeFullscreen();
         activeTabMode = mode;
         const isPlayback = mode === 'playback';
         const isManage = mode === 'manage';
@@ -4717,8 +5726,10 @@
         if (manageView) manageView.style.display = isManage ? 'flex' : 'none';
         if (isPlayback) {
           pauseLivePreview();
+          pendingSilentEvents = null;
+          if (newEventsBanner) newEventsBanner.style.display = 'none';
           loadSegmentsAndTimeline();
-          loadEvents();
+          loadEvents({ silent: false });
           startPlaybackAutoRefresh();
         } else if (isManage) {
           stopPlaybackAutoRefresh();
@@ -4756,65 +5767,251 @@
         snapCloseBtn.addEventListener('click', () => { fullSnapWrap.style.display = 'none'; });
       }
 
-      function updatePlayPauseBtn() {
-        if (!playPauseBtn) return;
+      let pbHideTimer = null;
+      let pbToastTimer = null;
+      let lastVideoTouchAt = 0;
+      let lastTapInfo = { ts: 0, zone: '' };
+      let pbMuted = false;
+
+      function showPbPlayerOverlay(keepVisible) {
+        if (!pbPlayerOverlay) return;
+        pbPlayerOverlay.classList.remove('overlay-hidden');
+        if (pbHideTimer) { clearTimeout(pbHideTimer); pbHideTimer = null; }
         const v = getActiveVideo();
-        playPauseBtn.textContent = v.paused ? t('pbPlay') : t('pbPause');
+        if (!keepVisible && v && !v.paused) {
+          pbHideTimer = setTimeout(() => {
+            pbPlayerOverlay.classList.add('overlay-hidden');
+          }, 3500);
+        }
+      }
+
+      function hidePbPlayerOverlay() {
+        if (!pbPlayerOverlay) return;
+        if (pbHideTimer) { clearTimeout(pbHideTimer); pbHideTimer = null; }
+        pbPlayerOverlay.classList.add('overlay-hidden');
+      }
+
+      function showPbSeekToast(text) {
+        if (!pbSeekToast) return;
+        pbSeekToast.textContent = text;
+        pbSeekToast.style.display = 'block';
+        if (pbToastTimer) clearTimeout(pbToastTimer);
+        pbToastTimer = setTimeout(() => {
+          pbSeekToast.style.display = 'none';
+        }, 700);
+      }
+
+      function updatePlayPauseBtn() {
+        const v = getActiveVideo();
+        const paused = !v || v.paused;
+        if (playPauseBtn) playPauseBtn.textContent = paused ? t('pbPlay') : t('pbPause');
+        if (pbCenterPlayBtn) pbCenterPlayBtn.textContent = paused ? '▶' : '⏸';
+        if (paused) showPbPlayerOverlay(true);
+        else showPbPlayerOverlay(false);
       }
       languageChangeListeners.push(updatePlayPauseBtn);
 
-      if (playPauseBtn) {
-        playPauseBtn.addEventListener('click', () => {
-          const v = getActiveVideo();
-          if (!v.src) {
-            if (segments.length > 0) {
-              if (currentWallMs > 0) {
-                seekToWallTime(currentWallMs);
-              } else {
-                playSegmentAt(segments.length - 1, 0);
-              }
-            }
-            return;
-          }
-          if (v.paused) v.play().catch(() => {});
-          else v.pause();
-          updatePlayPauseBtn();
+      function updatePlaybackMuteBtn() {
+        videoA.muted = pbMuted;
+        videoB.muted = pbMuted;
+        if (pbMuteBtn) {
+          pbMuteBtn.textContent = pbMuted ? '🔇 静音' : '🔊 声音';
+          pbMuteBtn.classList.toggle('active', pbMuted);
+        }
+      }
+      updatePlaybackMuteBtn();
+
+      const pbBoxToggleBtn = getElById('pbBoxToggleBtn');
+      let pbPlateBoxEnabled = (() => {
+        try {
+          const saved = localStorage.getItem('pbPlateBoxEnabled');
+          return saved === null ? true : saved === '1';
+        } catch (_) {
+          return true;
+        }
+      })();
+      function updatePlaybackBoxToggleBtn() {
+        if (!pbBoxToggleBtn) return;
+        pbBoxToggleBtn.classList.toggle('active', pbPlateBoxEnabled);
+        pbBoxToggleBtn.textContent = pbPlateBoxEnabled ? '🟩 车牌框' : '⬜ 车牌框:关';
+      }
+      updatePlaybackBoxToggleBtn();
+      if (pbBoxToggleBtn) {
+        pbBoxToggleBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          pbPlateBoxEnabled = !pbPlateBoxEnabled;
+          try { localStorage.setItem('pbPlateBoxEnabled', pbPlateBoxEnabled ? '1' : '0'); } catch (_) {}
+          updatePlaybackBoxToggleBtn();
+          renderPlaybackCardAndOverlay(currentWallMs);
+          showPbPlayerOverlay(false);
         });
       }
 
-      if (back10Btn) {
-        back10Btn.addEventListener('click', () => {
-          if (currentWallMs > 0) seekToWallTime(currentWallMs - 10_000);
-        });
-      }
-      if (back5Btn) {
-        back5Btn.addEventListener('click', () => {
-          if (currentWallMs > 0) seekToWallTime(currentWallMs - 5_000);
-        });
-      }
-      if (fwd5Btn) {
-        fwd5Btn.addEventListener('click', () => {
-          if (currentWallMs > 0) seekToWallTime(currentWallMs + 5_000);
-        });
-      }
-      if (fwd10Btn) {
-        fwd10Btn.addEventListener('click', () => {
-          if (currentWallMs > 0) seekToWallTime(currentWallMs + 10_000);
-        });
-      }
-      function togglePlaybackFullscreen() {
-        if (!videoWrap) return;
-        if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-          if (videoWrap.requestFullscreen) videoWrap.requestFullscreen();
-          else if (videoWrap.webkitRequestFullscreen) videoWrap.webkitRequestFullscreen();
-        } else {
-          if (document.exitFullscreen) document.exitFullscreen();
-          else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+      function syncPlaybackSeekUi() {
+        const v = getActiveVideo();
+        const dur = (v && isFinite(v.duration) && v.duration > 0) ? v.duration : 0;
+        const cur = (v && isFinite(v.currentTime) && v.currentTime >= 0) ? v.currentTime : 0;
+        if (pbSegDurTime) pbSegDurTime.textContent = formatOffset(dur * 1000);
+        if (!isSeekingSegBar) {
+          if (pbSegCurTime) pbSegCurTime.textContent = formatOffset(cur * 1000);
+          if (pbSegSeekBar) pbSegSeekBar.value = dur > 0 ? String(Math.round((cur / dur) * 1000)) : '0';
         }
+        if (pbFsClock && currentWallMs > 0) pbFsClock.textContent = formatHms(currentWallMs);
       }
-      if (pbFullscreenBtn) pbFullscreenBtn.addEventListener('click', togglePlaybackFullscreen);
-      if (videoWrap) videoWrap.addEventListener('dblclick', togglePlaybackFullscreen);
+
+      function togglePlaybackPlayPause() {
+        const v = getActiveVideo();
+        if (!v.src) {
+          if (segments.length > 0) {
+            if (currentWallMs > 0) seekToWallTime(currentWallMs);
+            else playSegmentAt(segments.length - 1, 0);
+          }
+          return;
+        }
+        if (v.paused) v.play().catch(() => {});
+        else v.pause();
+        updatePlayPauseBtn();
+      }
+
+      function seekRelativeSec(deltaSec) {
+        if (currentWallMs > 0 && segments.length > 0) {
+          seekToWallTime(currentWallMs + deltaSec * 1000);
+        } else {
+          const v = getActiveVideo();
+          if (v && v.src && isFinite(v.duration) && v.duration > 0) {
+            v.currentTime = Math.max(0, Math.min(v.duration, (v.currentTime || 0) + deltaSec));
+          }
+        }
+        showPbSeekToast(deltaSec < 0 ? `${deltaSec}s` : `+${deltaSec}s`);
+        showPbPlayerOverlay(false);
+      }
+
+      if (playPauseBtn) playPauseBtn.addEventListener('click', (e) => { e.stopPropagation(); togglePlaybackPlayPause(); });
+      if (pbCenterPlayBtn) pbCenterPlayBtn.addEventListener('click', (e) => { e.stopPropagation(); togglePlaybackPlayPause(); });
+      if (pbCenterBack10) pbCenterBack10.addEventListener('click', (e) => { e.stopPropagation(); seekRelativeSec(-10); });
+      if (pbCenterFwd10) pbCenterFwd10.addEventListener('click', (e) => { e.stopPropagation(); seekRelativeSec(10); });
+      if (back5Btn) back5Btn.addEventListener('click', (e) => { e.stopPropagation(); seekRelativeSec(-5); });
+      if (fwd5Btn) fwd5Btn.addEventListener('click', (e) => { e.stopPropagation(); seekRelativeSec(5); });
+      if (pbMuteBtn) {
+        pbMuteBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          pbMuted = !pbMuted;
+          updatePlaybackMuteBtn();
+          showPbPlayerOverlay(false);
+        });
+      }
+      if (pbSegSeekBar) {
+        pbSegSeekBar.addEventListener('input', (e) => {
+          e.stopPropagation();
+          isSeekingSegBar = true;
+          const v = getActiveVideo();
+          const dur = (v && isFinite(v.duration) && v.duration > 0) ? v.duration : 0;
+          const ratio = Math.max(0, Math.min(1, Number(pbSegSeekBar.value || 0) / 1000));
+          if (pbSegCurTime) pbSegCurTime.textContent = formatOffset(ratio * dur * 1000);
+          showPbPlayerOverlay(true);
+        });
+        pbSegSeekBar.addEventListener('change', (e) => {
+          e.stopPropagation();
+          const v = getActiveVideo();
+          const dur = (v && isFinite(v.duration) && v.duration > 0) ? v.duration : 0;
+          const ratio = Math.max(0, Math.min(1, Number(pbSegSeekBar.value || 0) / 1000));
+          if (v && v.src && dur > 0) {
+            const targetTime = ratio * dur;
+            v.currentTime = targetTime;
+            if (currentSegIdx >= 0 && segments[currentSegIdx]) {
+              currentWallMs = segments[currentSegIdx].startMs + targetTime * 1000;
+              if (clockTextEl) clockTextEl.textContent = formatTime(currentWallMs);
+              drawTimeline();
+            }
+          }
+          isSeekingSegBar = false;
+          showPbPlayerOverlay(false);
+        });
+      }
+
+      function togglePlaybackFullscreen() {
+        toggleContainerFullscreen(videoWrap);
+      }
+      if (pbFullscreenBtn) pbFullscreenBtn.addEventListener('click', (e) => { e.stopPropagation(); togglePlaybackFullscreen(); });
+      if (pbFsExitBtn) pbFsExitBtn.addEventListener('click', (e) => { e.stopPropagation(); exitLandscapeFullscreen(); });
+
+      if (videoWrap) {
+        const isInsideControls = (tNode) => !!(tNode && tNode.closest && (
+          tNode.closest('.player-bottom-bar') ||
+          tNode.closest('.player-top-bar') ||
+          tNode.closest('.player-center-controls')
+        ));
+        videoWrap.addEventListener('mousemove', () => {
+          if (Date.now() - lastVideoTouchAt < 500) return;
+          showPbPlayerOverlay(false);
+        });
+        videoWrap.addEventListener('mouseleave', () => {
+          const v = getActiveVideo();
+          if (v && !v.paused) hidePbPlayerOverlay();
+        });
+        videoWrap.addEventListener('touchend', (e) => {
+          lastVideoTouchAt = Date.now();
+          if (isInsideControls(e.target)) return;
+          const touch = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0] : null;
+          if (!touch) return;
+          const rect = videoWrap.getBoundingClientRect();
+          const relX = (touch.clientX - rect.left) / Math.max(1, rect.width);
+          const zone = relX < 0.30 ? 'left' : (relX > 0.70 ? 'right' : 'center');
+          const now = Date.now();
+          if (lastTapInfo.zone === zone && now - lastTapInfo.ts < 280) {
+            e.preventDefault();
+            lastTapInfo = { ts: 0, zone: '' };
+            if (zone === 'left') seekRelativeSec(-10);
+            else if (zone === 'right') seekRelativeSec(10);
+            else togglePlaybackPlayPause();
+          } else {
+            lastTapInfo = { ts: now, zone };
+          }
+        }, { passive: false });
+        videoWrap.addEventListener('click', (e) => {
+          if (isInsideControls(e.target)) {
+            showPbPlayerOverlay(false);
+            return;
+          }
+          if (pbPlayerOverlay && pbPlayerOverlay.classList.contains('overlay-hidden')) showPbPlayerOverlay(false);
+          else {
+            const v = getActiveVideo();
+            if (v && !v.paused) hidePbPlayerOverlay();
+            else showPbPlayerOverlay(true);
+          }
+        });
+        videoWrap.addEventListener('dblclick', (e) => {
+          if (isInsideControls(e.target)) return;
+          togglePlaybackFullscreen();
+        });
+      }
+
+      document.addEventListener('keydown', (e) => {
+        if (activeTabMode !== 'playback') return;
+        const tag = (e.target && e.target.tagName) ? e.target.tagName.toUpperCase() : '';
+        if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+        if (lightboxEl && lightboxEl.style.display === 'flex') return;
+        if (e.code === 'Space') {
+          e.preventDefault();
+          togglePlaybackPlayPause();
+        } else if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          seekRelativeSec(-5);
+        } else if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          seekRelativeSec(5);
+        } else if (e.key === 'f' || e.key === 'F') {
+          e.preventDefault();
+          togglePlaybackFullscreen();
+        } else if (e.key === 'm' || e.key === 'M') {
+          e.preventDefault();
+          pbMuted = !pbMuted;
+          updatePlaybackMuteBtn();
+        }
+      });
+
       document.addEventListener('fullscreenchange', () => {
+        syncFullscreenOverlayUi();
         if (playbackView.style.display !== 'none') renderPlaybackCardAndOverlay(currentWallMs);
       });
       if (fullSnapImg) {
@@ -4823,10 +6020,12 @@
         });
       }
       if (speedSelect) {
-        speedSelect.addEventListener('change', () => {
+        speedSelect.addEventListener('change', (e) => {
+          e.stopPropagation();
           playbackRate = Number(speedSelect.value) || 1;
           videoA.playbackRate = playbackRate;
           videoB.playbackRate = playbackRate;
+          showPbPlayerOverlay(false);
         });
       }
 
@@ -4931,6 +6130,23 @@
         syncDateControls();
       }
 
+      function clampTimelineViewStart(startMs, spanMs, dateKey) {
+        const { dayStartMs, dayEndMs } = getDayBoundsMs(dateKey || selectedDateStr || formatDateKey(startMs || Date.now()));
+        const maxStart = Math.max(dayStartMs, dayEndMs - spanMs);
+        return Math.max(dayStartMs, Math.min(maxStart, startMs));
+      }
+
+      function centerTimelineOn(ms) {
+        const { dayStartMs, dayMidMs } = getDayBoundsMs(selectedDateStr || formatDateKey(ms || Date.now()));
+        const target = ms > 0 ? ms : dayMidMs;
+        if (tlZoomMs >= 86_400_000) {
+          tlViewStartMs = dayStartMs;
+        } else {
+          tlViewStartMs = clampTimelineViewStart(target - tlZoomMs / 2, tlZoomMs);
+        }
+        tlUserPanned = false;
+      }
+
       function selectDate(dateStr, jumpToSegment = true) {
         if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr || '')) return;
         selectedDateStr = dateStr;
@@ -4949,6 +6165,10 @@
             currentWallMs = tlZoomMode === 'pm' ? dayMidMs : dayStartMs;
           }
         }
+        tlUserPanned = false;
+        if (tlZoomMode === 'pm') tlViewStartMs = dayMidMs;
+        else if (tlZoomMode === 'all' || tlZoomMode === 'am') tlViewStartMs = dayStartMs;
+        else centerTimelineOn(currentWallMs || dayMidMs);
         drawTimeline();
       }
 
@@ -4958,14 +6178,30 @@
         if (key !== selectedDateStr) {
           selectedDateStr = key;
           syncDateControls();
+          if (tlZoomMode === 'all' || tlZoomMs >= 86_400_000) {
+            tlViewStartMs = getDayBoundsMs(key).dayStartMs;
+          }
         }
       }
 
       function setZoom(mode, ms, activeBtn) {
+        const { dayStartMs, dayMidMs } = getDayBoundsMs(selectedDateStr || formatDateKey(currentWallMs || Date.now()));
         tlZoomMode = mode;
-        tlZoomMs = ms;
+        tlZoomMs = Math.max(300_000, Math.min(86_400_000, ms || 86_400_000));
         [tlZoomAll, tlZoomAm, tlZoomPm, tlZoom1h, tlZoom15m].forEach(b => b && b.classList.remove('active'));
         if (activeBtn) activeBtn.classList.add('active');
+        if (mode === 'all') {
+          tlViewStartMs = dayStartMs;
+          tlUserPanned = false;
+        } else if (mode === 'am') {
+          tlViewStartMs = dayStartMs;
+          tlUserPanned = false;
+        } else if (mode === 'pm') {
+          tlViewStartMs = dayMidMs;
+          tlUserPanned = false;
+        } else {
+          centerTimelineOn(currentWallMs || dayMidMs);
+        }
         drawTimeline();
       }
       if (tlZoomAll) tlZoomAll.addEventListener('click', () => setZoom('all', 86_400_000, tlZoomAll));
@@ -4973,6 +6209,14 @@
       if (tlZoomPm) tlZoomPm.addEventListener('click', () => setZoom('pm', 43_200_000, tlZoomPm));
       if (tlZoom1h) tlZoom1h.addEventListener('click', () => setZoom('1h', 3600_000, tlZoom1h));
       if (tlZoom15m) tlZoom15m.addEventListener('click', () => setZoom('15m', 900_000, tlZoom15m));
+      if (tlCenterNowBtn) {
+        tlCenterNowBtn.addEventListener('click', () => {
+          const target = currentWallMs || (segments.length ? segments[segments.length - 1].startMs : Date.now());
+          syncSelectedDateToMs(target);
+          centerTimelineOn(target);
+          drawTimeline();
+        });
+      }
 
       if (pbPrevDayBtn) pbPrevDayBtn.addEventListener('click', () => selectDate(shiftDateKey(selectedDateStr, -1), true));
       if (pbNextDayBtn) pbNextDayBtn.addEventListener('click', () => selectDate(shiftDateKey(selectedDateStr, 1), true));
@@ -5017,6 +6261,8 @@
       });
 
       function loadSegmentsAndTimeline() {
+        const prevActiveName = (currentSegIdx >= 0 && segments[currentSegIdx]) ? segments[currentSegIdx].name : null;
+        const prevPreloadName = (preloadedSegIdx >= 0 && segments[preloadedSegIdx]) ? segments[preloadedSegIdx].name : null;
         return Promise.all([
           fetch('/files.json', { credentials: 'include', cache: 'no-store' }).then(r => r.json()).catch(() => ({ files: [] })),
           fetch('/api/events?limit=200&offset=0', { credentials: 'include', cache: 'no-store' }).then(r => r.json()).catch(() => ({ events: [] }))
@@ -5031,8 +6277,10 @@
             })
             .sort((a, b) => a.startMs - b.startMs);
 
+          currentSegIdx = prevActiveName ? segments.findIndex(s => s.name === prevActiveName) : -1;
+          preloadedSegIdx = prevPreloadName ? segments.findIndex(s => s.name === prevPreloadName) : -1;
           timelineEvents = Array.isArray(eventsData.events) ? eventsData.events : [];
-          if (currentSegIdx < 0 && segments.length > 0) {
+          if (currentWallMs <= 0 && currentSegIdx < 0 && segments.length > 0) {
             currentWallMs = segments[segments.length - 1].startMs;
           }
           populateDateSelect();
@@ -5050,9 +6298,9 @@
           downloadLink.download = seg.name;
           downloadLink.style.display = 'inline-block';
         }
-        if (nowInfoEl) {
-          nowInfoEl.textContent = infoLabel || `正在播放: ${seg.name}`;
-        }
+        const label = infoLabel || `正在播放: ${seg.name}`;
+        if (nowInfoEl) nowInfoEl.textContent = label;
+        if (pbFsTitle) pbFsTitle.textContent = label;
 
         const targetTime = Math.max(0, Number(offsetSec) || 0);
         const curV = getActiveVideo();
@@ -5063,8 +6311,10 @@
         if (currentSegIdx === segIdx && curV.src && curV.readyState >= 1) {
           curV.currentTime = isFinite(curV.duration) ? Math.min(targetTime, Math.max(0, curV.duration - 0.2)) : targetTime;
           curV.playbackRate = playbackRate;
+          curV.muted = pbMuted;
           curV.play().catch(() => {});
           updatePlayPauseBtn();
+          syncPlaybackSeekUi();
           return;
         }
 
@@ -5086,8 +6336,10 @@
             curV.currentTime = isFinite(curV.duration) ? Math.min(targetTime, Math.max(0, curV.duration - 0.2)) : targetTime;
           }
           curV.playbackRate = playbackRate;
+          curV.muted = pbMuted;
           curV.play().catch(() => {});
           updatePlayPauseBtn();
+          syncPlaybackSeekUi();
           drawTimeline();
         };
         curV.addEventListener('loadedmetadata', onMeta);
@@ -5102,6 +6354,7 @@
         const nextSeg = segments[nextIdx];
         stbV.src = `/files/stream/${encodeURIComponent(nextSeg.name)}`;
         stbV.playbackRate = playbackRate;
+        stbV.muted = pbMuted;
         stbV.load();
       }
 
@@ -5119,6 +6372,7 @@
         newV.style.opacity = '1';
         newV.style.pointerEvents = 'auto';
         newV.playbackRate = playbackRate;
+        newV.muted = pbMuted;
         if (startOffsetSec > 0) newV.currentTime = startOffsetSec;
         newV.play().catch(() => {});
 
@@ -5128,10 +6382,20 @@
           downloadLink.download = seg.name;
           downloadLink.style.display = 'inline-block';
         }
-        if (nowInfoEl && seg) {
-          nowInfoEl.textContent = `无缝续播: ${seg.name}`;
+        if (seg) {
+          if (nowInfoEl) nowInfoEl.textContent = `无缝续播: ${seg.name}`;
+          if (pbFsTitle) pbFsTitle.textContent = `无缝续播: ${seg.name}`;
         }
         updatePlayPauseBtn();
+        syncPlaybackSeekUi();
+      }
+
+      function ensureTimeInTimelineView(ms) {
+        if (!ms || tlZoomMs >= 86_400_000) return;
+        const { minMs, maxMs } = getTimelineBounds();
+        if (ms < minMs || ms > maxMs) {
+          centerTimelineOn(ms);
+        }
       }
 
       function seekToWallTime(targetMs) {
@@ -5149,46 +6413,56 @@
         }
         currentWallMs = targetMs;
         syncSelectedDateToMs(targetMs);
+        tlUserPanned = false;
+        ensureTimeInTimelineView(targetMs);
         playSegmentAt(idx, offsetSec, `时间轨定位: ${formatTime(targetMs)}`);
+        drawTimeline();
       }
 
       function getTimelineBounds() {
         const dateKey = selectedDateStr || formatDateKey(currentWallMs || Date.now());
         const { dayStartMs, dayMidMs, dayEndMs } = getDayBoundsMs(dateKey);
+        const span = Math.max(300_000, Math.min(86_400_000, tlZoomMs || 86_400_000));
 
-        if (tlZoomMode === 'am') {
-          return { minMs: dayStartMs, maxMs: dayMidMs };
-        }
-        if (tlZoomMode === 'pm') {
-          return { minMs: dayMidMs, maxMs: dayEndMs };
-        }
-        if (tlZoomMode === 'all' || !tlZoomMs || tlZoomMs >= 86_400_000) {
+        if (tlZoomMode === 'all' || span >= 86_400_000) {
+          tlViewStartMs = dayStartMs;
           return { minMs: dayStartMs, maxMs: dayEndMs };
         }
 
-        let center = currentWallMs;
-        if (!center || center < dayStartMs || center > dayEndMs) {
-          const daySeg = segments.find(s => s.endMs >= dayStartMs && s.startMs <= dayEndMs);
-          center = daySeg ? Math.max(dayStartMs, daySeg.startMs) : dayMidMs;
+        if (!tlViewStartMs || tlViewStartMs < dayStartMs - 1 || tlViewStartMs > dayEndMs) {
+          if (tlZoomMode === 'am') {
+            tlViewStartMs = dayStartMs;
+          } else if (tlZoomMode === 'pm') {
+            tlViewStartMs = dayMidMs;
+          } else {
+            let center = currentWallMs;
+            if (!center || center < dayStartMs || center > dayEndMs) {
+              const daySeg = segments.find(s => s.endMs >= dayStartMs && s.startMs <= dayEndMs);
+              center = daySeg ? Math.max(dayStartMs, daySeg.startMs) : dayMidMs;
+            }
+            tlViewStartMs = center - span / 2;
+          }
         }
-        let minMs = center - tlZoomMs / 2;
-        let maxMs = center + tlZoomMs / 2;
-        if (minMs < dayStartMs) { minMs = dayStartMs; maxMs = dayStartMs + tlZoomMs; }
-        if (maxMs > dayEndMs) { maxMs = dayEndMs; minMs = dayEndMs - tlZoomMs; }
-        return { minMs, maxMs };
+        const minMs = clampTimelineViewStart(tlViewStartMs, span, dateKey);
+        tlViewStartMs = minMs;
+        return { minMs, maxMs: Math.min(dayEndMs, minMs + span) };
       }
 
       function drawTimeline() {
         if (!tlCanvas) return;
         const rect = tlCanvas.getBoundingClientRect();
         if (rect.width <= 0 || rect.height <= 0) return;
-        if (tlCanvas.width !== Math.round(rect.width) || tlCanvas.height !== Math.round(rect.height)) {
-          tlCanvas.width = Math.round(rect.width);
-          tlCanvas.height = Math.round(rect.height);
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const targetW = Math.round(rect.width * dpr);
+        const targetH = Math.round(rect.height * dpr);
+        if (tlCanvas.width !== targetW || tlCanvas.height !== targetH) {
+          tlCanvas.width = targetW;
+          tlCanvas.height = targetH;
         }
         const ctx = tlCanvas.getContext('2d');
-        const W = tlCanvas.width;
-        const H = tlCanvas.height;
+        const W = rect.width;
+        const H = rect.height;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         ctx.clearRect(0, 0, W, H);
 
         const { minMs, maxMs } = getTimelineBounds();
@@ -5212,13 +6486,13 @@
         ctx.font = '10px monospace';
         ctx.textBaseline = 'top';
         for (let i = 0; i <= tickCount; i++) {
-          const t = minMs + (span * i) / tickCount;
+          const tMs = minMs + (span * i) / tickCount;
           const x = Math.round((W * i) / tickCount);
           ctx.beginPath();
           ctx.moveTo(x, 0);
           ctx.lineTo(x, 18);
           ctx.stroke();
-          const label = formatHms(t);
+          const label = formatHms(tMs);
           const lx = Math.min(W - 52, Math.max(2, x + 3));
           ctx.fillText(label, lx, 3);
         }
@@ -5234,7 +6508,29 @@
           ctx.fill();
         }
 
-        // 4. 播放指针 (Playhead)
+        // 4. 缩放状态下绘制可见窗口范围提示
+        if (span < 86_400_000) {
+          ctx.fillStyle = 'rgba(148, 163, 184, 0.72)';
+          ctx.font = '10px monospace';
+          ctx.textBaseline = 'bottom';
+          ctx.fillText(`${formatHms(minMs)} - ${formatHms(maxMs)}`, 4, H - 2);
+        }
+
+        // 5. 拖动预览针（仅24h全局拖动松手前显示）
+        if (tlScrubPreviewMs !== null && tlScrubPreviewMs >= minMs && tlScrubPreviewMs <= maxMs) {
+          const sx = toX(tlScrubPreviewMs);
+          ctx.save();
+          ctx.strokeStyle = '#f59e0b';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([4, 3]);
+          ctx.beginPath();
+          ctx.moveTo(sx, 0);
+          ctx.lineTo(sx, H);
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        // 6. 播放指针 (Playhead)
         if (currentWallMs >= minMs && currentWallMs <= maxMs) {
           const px = toX(currentWallMs);
           ctx.strokeStyle = '#f43f5e';
@@ -5247,47 +6543,239 @@
       }
 
       if (tlCanvas) {
-        const clientXToWallMs = (clientX) => {
-          const rect = tlCanvas.getBoundingClientRect();
-          const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / Math.max(1, rect.width)));
+        const showTlTooltipAt = (clientX, rect, tMs, textOverride) => {
+          if (!tlTooltip) return;
           const { minMs, maxMs } = getTimelineBounds();
-          return minMs + ratio * (maxMs - minMs);
+          const nearEv = timelineEvents.find(ev => Math.abs(ev.eventTimeMs - tMs) < Math.max(3000, maxMs - minMs) * 0.015);
+          tlTooltip.textContent = textOverride || (nearEv ? `${formatHms(tMs)} · ${nearEv.plateCode}` : formatHms(tMs));
+          tlTooltip.style.left = `${Math.min(Math.max(8, rect.width - 130), Math.max(8, clientX - rect.left + 10))}px`;
+          tlTooltip.style.top = '16px';
+          tlTooltip.style.display = 'block';
         };
+        const hideTlTooltip = () => {
+          if (tlTooltip) tlTooltip.style.display = 'none';
+        };
+        const clientXFromFrozen = (clientX, rect, viewStart, span) => {
+          const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / Math.max(1, rect.width)));
+          return viewStart + ratio * span;
+        };
+
+        let tlGesture = null;
+
         tlCanvas.addEventListener('mousedown', (e) => {
+          if (Date.now() - lastTlTouchAtMs < 600) return;
+          const rect = tlCanvas.getBoundingClientRect();
+          const { minMs, maxMs } = getTimelineBounds();
           isDraggingTl = true;
-          seekToWallTime(clientXToWallMs(e.clientX));
+          tlGesture = {
+            mode: 'mouse',
+            startX: e.clientX,
+            startRect: rect,
+            startViewStartMs: minMs,
+            startZoomMs: Math.max(1000, maxMs - minMs),
+            moved: false
+          };
         });
+
         window.addEventListener('mousemove', (e) => {
-          if (isDraggingTl) {
-            seekToWallTime(clientXToWallMs(e.clientX));
+          if (!isDraggingTl || !tlGesture || tlGesture.mode !== 'mouse') return;
+          const dx = e.clientX - tlGesture.startX;
+          if (!tlGesture.moved && Math.abs(dx) > 5) tlGesture.moved = true;
+          if (!tlGesture.moved) return;
+
+          if (tlGesture.startZoomMs < 86_400_000) {
+            const deltaMs = -(dx / Math.max(1, tlGesture.startRect.width)) * tlGesture.startZoomMs;
+            tlViewStartMs = clampTimelineViewStart(tlGesture.startViewStartMs + deltaMs, tlGesture.startZoomMs);
+            tlUserPanned = true;
+            drawTimeline();
+            const centerMs = tlViewStartMs + tlGesture.startZoomMs / 2;
+            showTlTooltipAt(e.clientX, tlGesture.startRect, centerMs, `${formatHms(tlViewStartMs)} - ${formatHms(tlViewStartMs + tlGesture.startZoomMs)}`);
+          } else {
+            tlScrubPreviewMs = clientXFromFrozen(e.clientX, tlGesture.startRect, tlGesture.startViewStartMs, tlGesture.startZoomMs);
+            drawTimeline();
+            showTlTooltipAt(e.clientX, tlGesture.startRect, tlScrubPreviewMs);
           }
         });
-        window.addEventListener('mouseup', () => { isDraggingTl = false; });
+
+        window.addEventListener('mouseup', (e) => {
+          if (!isDraggingTl || !tlGesture || tlGesture.mode !== 'mouse') return;
+          const g = tlGesture;
+          isDraggingTl = false;
+          tlGesture = null;
+          hideTlTooltip();
+          if (!g.moved) {
+            const targetMs = clientXFromFrozen(e.clientX, g.startRect, g.startViewStartMs, g.startZoomMs);
+            seekToWallTime(targetMs);
+          } else if (tlScrubPreviewMs !== null) {
+            const commitMs = tlScrubPreviewMs;
+            tlScrubPreviewMs = null;
+            seekToWallTime(commitMs);
+          }
+        });
+
         tlCanvas.addEventListener('mousemove', (e) => {
-          if (!tlTooltip) return;
-          const tMs = clientXToWallMs(e.clientX);
-          const nearEv = timelineEvents.find(ev => Math.abs(ev.eventTimeMs - tMs) < Math.max(3000, getTimelineBounds().maxMs - getTimelineBounds().minMs) * 0.015);
-          tlTooltip.textContent = nearEv ? `${formatHms(tMs)} · ${nearEv.plateCode}` : formatHms(tMs);
+          if (isDraggingTl || Date.now() - lastTlTouchAtMs < 600) return;
           const rect = tlCanvas.getBoundingClientRect();
-          tlTooltip.style.left = `${Math.min(rect.width - 110, Math.max(8, e.clientX - rect.left + 10))}px`;
-          tlTooltip.style.top = '18px';
-          tlTooltip.style.display = 'block';
+          const { minMs, maxMs } = getTimelineBounds();
+          const tMs = clientXFromFrozen(e.clientX, rect, minMs, maxMs - minMs);
+          showTlTooltipAt(e.clientX, rect, tMs);
         });
         tlCanvas.addEventListener('mouseleave', () => {
-          if (tlTooltip) tlTooltip.style.display = 'none';
+          if (!isDraggingTl) hideTlTooltip();
         });
+
+        tlCanvas.addEventListener('wheel', (e) => {
+          e.preventDefault();
+          const rect = tlCanvas.getBoundingClientRect();
+          const { minMs, maxMs } = getTimelineBounds();
+          const curSpan = Math.max(300_000, maxMs - minMs);
+          const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / Math.max(1, rect.width)));
+          const anchorMs = minMs + ratio * curSpan;
+          const factor = e.deltaY < 0 ? 0.72 : 1.38;
+          const nextSpan = Math.max(300_000, Math.min(86_400_000, Math.round(curSpan * factor)));
+          tlZoomMs = nextSpan;
+          tlZoomMode = nextSpan >= 86_400_000 ? 'all' : 'custom';
+          [tlZoomAll, tlZoomAm, tlZoomPm, tlZoom1h, tlZoom15m].forEach(b => b && b.classList.remove('active'));
+          if (nextSpan >= 86_400_000 && tlZoomAll) tlZoomAll.classList.add('active');
+          tlViewStartMs = clampTimelineViewStart(anchorMs - ratio * nextSpan, nextSpan);
+          tlUserPanned = nextSpan < 86_400_000;
+          drawTimeline();
+        }, { passive: false });
+
         tlCanvas.addEventListener('touchstart', (e) => {
+          lastTlTouchAtMs = Date.now();
           if (!e.touches || !e.touches.length) return;
-          isDraggingTl = true;
-          seekToWallTime(clientXToWallMs(e.touches[0].clientX));
           e.preventDefault();
+          const rect = tlCanvas.getBoundingClientRect();
+          const { minMs, maxMs } = getTimelineBounds();
+          const span = Math.max(300_000, maxMs - minMs);
+
+          if (e.touches.length >= 2) {
+            const t0 = e.touches[0];
+            const t1 = e.touches[1];
+            const dist = Math.max(12, Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY));
+            const midX = (t0.clientX + t1.clientX) / 2;
+            const midRatio = Math.max(0, Math.min(1, (midX - rect.left) / Math.max(1, rect.width)));
+            isDraggingTl = true;
+            tlScrubPreviewMs = null;
+            tlGesture = {
+              mode: 'pinch',
+              startRect: rect,
+              startViewStartMs: minMs,
+              startZoomMs: span,
+              startDist: dist,
+              midMs: minMs + midRatio * span,
+              wasPinch: true
+            };
+          } else {
+            const t0 = e.touches[0];
+            isDraggingTl = true;
+            tlScrubPreviewMs = null;
+            tlGesture = {
+              mode: 'pan',
+              startX: t0.clientX,
+              startY: t0.clientY,
+              lastX: t0.clientX,
+              startRect: rect,
+              startViewStartMs: minMs,
+              startZoomMs: span,
+              moved: false,
+              wasPinch: false
+            };
+          }
         }, { passive: false });
+
         tlCanvas.addEventListener('touchmove', (e) => {
-          if (!isDraggingTl || !e.touches || !e.touches.length) return;
-          seekToWallTime(clientXToWallMs(e.touches[0].clientX));
+          lastTlTouchAtMs = Date.now();
+          if (!tlGesture || !e.touches || !e.touches.length) return;
           e.preventDefault();
+
+          if (e.touches.length >= 2) {
+            const t0 = e.touches[0];
+            const t1 = e.touches[1];
+            const dist = Math.max(12, Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY));
+            if (tlGesture.mode !== 'pinch') {
+              const rect = tlCanvas.getBoundingClientRect();
+              const { minMs, maxMs } = getTimelineBounds();
+              const span = Math.max(300_000, maxMs - minMs);
+              const midX = (t0.clientX + t1.clientX) / 2;
+              const midRatio = Math.max(0, Math.min(1, (midX - rect.left) / Math.max(1, rect.width)));
+              tlGesture = {
+                mode: 'pinch',
+                startRect: rect,
+                startViewStartMs: minMs,
+                startZoomMs: span,
+                startDist: dist,
+                midMs: minMs + midRatio * span,
+                wasPinch: true
+              };
+            }
+            const curMidX = (t0.clientX + t1.clientX) / 2;
+            const curMidRatio = Math.max(0, Math.min(1, (curMidX - tlGesture.startRect.left) / Math.max(1, tlGesture.startRect.width)));
+            const nextSpan = Math.max(300_000, Math.min(86_400_000, Math.round(tlGesture.startZoomMs * (tlGesture.startDist / dist))));
+            tlZoomMs = nextSpan;
+            tlZoomMode = nextSpan >= 86_400_000 ? 'all' : 'custom';
+            [tlZoomAll, tlZoomAm, tlZoomPm, tlZoom1h, tlZoom15m].forEach(b => b && b.classList.remove('active'));
+            if (nextSpan >= 86_400_000 && tlZoomAll) tlZoomAll.classList.add('active');
+            tlViewStartMs = clampTimelineViewStart(tlGesture.midMs - curMidRatio * nextSpan, nextSpan);
+            tlUserPanned = nextSpan < 86_400_000;
+            drawTimeline();
+            showTlTooltipAt(curMidX, tlGesture.startRect, tlGesture.midMs, `${formatHms(tlViewStartMs)} - ${formatHms(tlViewStartMs + nextSpan)}`);
+            return;
+          }
+
+          if (tlGesture.mode !== 'pan' || tlGesture.wasPinch) return;
+          const t0 = e.touches[0];
+          tlGesture.lastX = t0.clientX;
+          const dx = t0.clientX - tlGesture.startX;
+          if (!tlGesture.moved && Math.abs(dx) > 8) tlGesture.moved = true;
+          if (!tlGesture.moved) return;
+
+          if (tlGesture.startZoomMs < 86_400_000) {
+            const deltaMs = -(dx / Math.max(1, tlGesture.startRect.width)) * tlGesture.startZoomMs;
+            tlViewStartMs = clampTimelineViewStart(tlGesture.startViewStartMs + deltaMs, tlGesture.startZoomMs);
+            tlUserPanned = true;
+            drawTimeline();
+            const centerMs = tlViewStartMs + tlGesture.startZoomMs / 2;
+            showTlTooltipAt(t0.clientX, tlGesture.startRect, centerMs, `${formatHms(tlViewStartMs)} - ${formatHms(tlViewStartMs + tlGesture.startZoomMs)}`);
+          } else {
+            tlScrubPreviewMs = clientXFromFrozen(t0.clientX, tlGesture.startRect, tlGesture.startViewStartMs, tlGesture.startZoomMs);
+            drawTimeline();
+            showTlTooltipAt(t0.clientX, tlGesture.startRect, tlScrubPreviewMs);
+          }
         }, { passive: false });
-        tlCanvas.addEventListener('touchend', () => { isDraggingTl = false; });
+
+        const finishTouchTimeline = (e) => {
+          lastTlTouchAtMs = Date.now();
+          if (!tlGesture) return;
+          if (e.touches && e.touches.length > 0) {
+            tlGesture.wasPinch = true;
+            return;
+          }
+          const g = tlGesture;
+          isDraggingTl = false;
+          tlGesture = null;
+          hideTlTooltip();
+
+          if (!g.wasPinch && g.mode === 'pan') {
+            if (!g.moved) {
+              const endTouch = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0] : null;
+              const endX = endTouch ? endTouch.clientX : g.startX;
+              const targetMs = clientXFromFrozen(endX, g.startRect, g.startViewStartMs, g.startZoomMs);
+              seekToWallTime(targetMs);
+            } else if (tlScrubPreviewMs !== null) {
+              const commitMs = tlScrubPreviewMs;
+              tlScrubPreviewMs = null;
+              seekToWallTime(commitMs);
+            }
+          } else {
+            tlScrubPreviewMs = null;
+            drawTimeline();
+          }
+        };
+        tlCanvas.addEventListener('touchend', finishTouchTimeline, { passive: false });
+        tlCanvas.addEventListener('touchcancel', finishTouchTimeline, { passive: false });
+
         window.addEventListener('resize', () => {
           if (playbackView.style.display !== 'none') {
             drawTimeline();
@@ -5392,6 +6880,7 @@
         }
         const ctx = pbOverlay.getContext('2d');
         ctx.clearRect(0, 0, pbOverlay.width, pbOverlay.height);
+        if (!pbPlateBoxEnabled) return;
 
         const vw = curV.videoWidth || 0;
         const vh = curV.videoHeight || 0;
@@ -5446,6 +6935,13 @@
           currentWallMs = seg.startMs + (v.currentTime || 0) * 1000;
           syncSelectedDateToMs(currentWallMs);
           if (clockTextEl) clockTextEl.textContent = formatTime(currentWallMs);
+          if (!tlUserPanned && tlZoomMs < 86_400_000) {
+            const { minMs, maxMs } = getTimelineBounds();
+            if (currentWallMs < minMs || currentWallMs > maxMs) {
+              centerTimelineOn(currentWallMs);
+            }
+          }
+          syncPlaybackSeekUi();
           drawTimeline();
           renderPlaybackCardAndOverlay(currentWallMs);
 
@@ -5455,6 +6951,10 @@
               preloadNextSegment(currentSegIdx + 1);
             }
           }
+        });
+        v.addEventListener('loadedmetadata', () => {
+          if (activeSlot !== slotId) return;
+          syncPlaybackSeekUi();
         });
         v.addEventListener('ended', () => {
           if (activeSlot !== slotId) return;
@@ -5467,6 +6967,7 @@
             }
           } else {
             updatePlayPauseBtn();
+            syncPlaybackSeekUi();
           }
         });
         v.addEventListener('play', updatePlayPauseBtn);
@@ -5475,118 +6976,271 @@
       bindVideoEvents(videoA, 0);
       bindVideoEvents(videoB, 1);
 
-      let lastRenderedEvents = null;
+      let lastRenderedEvents = [];
       languageChangeListeners.push(() => {
         lastPbCardKey = null;
-        if (playbackView.style.display !== 'none' && lastRenderedEvents) {
-          renderEvents(lastRenderedEvents);
+        if (playbackView.style.display !== 'none' && lastRenderedEvents.length) {
+          renderEvents(lastRenderedEvents, { silent: false, forceRebuild: true });
         }
       });
 
-      function renderEvents(events) {
-        lastRenderedEvents = events;
-        if (!eventListEl) return;
-        if (!events || events.length === 0) {
-          eventListEl.innerHTML = `<div style="color:#64748b;text-align:center;padding:28px 12px;">${t('eventsEmpty')}</div>`;
-          return;
-        }
-        eventListEl.innerHTML = '';
-        events.forEach(ev => {
-          const card = document.createElement('div');
-          card.className = 'event-card' + (ev.id === activeEventId ? ' active' : '');
+      function eventsFingerprint(list) {
+        if (!Array.isArray(list)) return '';
+        return list.map(ev => `${ev.id}:${ev.plateCode || ''}:${Math.round((ev.confidence || 0) * 1000)}:${ev.eventTimeMs || 0}:${ev.videoFile || ''}:${ev.videoOffsetMs || 0}:${ev.plateImg || ''}:${ev.snapImg || ''}`).join('|');
+      }
 
-          const img = document.createElement('img');
-          img.className = 'event-thumb';
+      function updateEventCardElement(card, ev) {
+        card.__evData = ev;
+        card.dataset.eventId = String(ev.id);
+        card.className = 'event-card' + (ev.id === activeEventId ? ' active' : '');
+
+        const img = card._thumbImg;
+        const nextImgSrc = ev.plateImg ? `/api/events/image?file=${encodeURIComponent(ev.plateImg)}` : '';
+        if (img) {
           img.alt = ev.plateCode || 'plate';
-          img.style.cursor = 'zoom-in';
-          img.title = '点击查看大图';
           if (ev.plateImg) {
-            img.src = `/api/events/image?file=${encodeURIComponent(ev.plateImg)}`;
-            img.addEventListener('click', (e) => {
-              e.stopPropagation();
-              openImageLightbox(img.src, `${ev.plateCode || '--'} · ${formatTime(ev.eventTimeMs)}`);
-            });
+            if (img.dataset.imgFile !== ev.plateImg) {
+              img.dataset.imgFile = ev.plateImg;
+              img.src = nextImgSrc;
+            }
+          } else {
+            img.dataset.imgFile = '';
+            img.removeAttribute('src');
           }
+        }
 
-          const info = document.createElement('div');
-          info.style.flex = '1';
-          info.style.minWidth = '0';
-
-          const topRow = document.createElement('div');
-          topRow.style.display = 'flex';
-          topRow.style.alignItems = 'center';
-          topRow.style.gap = '6px';
-          topRow.style.flexWrap = 'wrap';
-
-          const plateSpan = document.createElement('span');
-          plateSpan.className = 'event-plate';
-          plateSpan.textContent = ev.plateCode || '--';
-          topRow.appendChild(plateSpan);
-
+        if (card._plateSpan) card._plateSpan.textContent = ev.plateCode || '--';
+        if (card._typeSpan) {
           const st = PLATE_TYPE_STYLES[ev.plateType] || DEFAULT_PLATE_STYLE;
-          const typeSpan = document.createElement('span');
-          typeSpan.className = 'event-badge';
-          typeSpan.style.background = st.bg;
-          typeSpan.style.color = st.text;
-          typeSpan.style.border = `1px solid ${st.border}`;
-          typeSpan.textContent = plateTypeLabel(ev.plateType);
-          topRow.appendChild(typeSpan);
-
-          const confSpan = document.createElement('span');
-          confSpan.style.fontSize = '11px';
-          confSpan.style.color = '#38bdf8';
-          confSpan.style.marginLeft = 'auto';
-          confSpan.textContent = `${Math.round((ev.confidence || 0) * 100)}%`;
-          topRow.appendChild(confSpan);
-
-          const meta = document.createElement('div');
-          meta.className = 'event-meta';
+          card._typeSpan.style.background = st.bg;
+          card._typeSpan.style.color = st.text;
+          card._typeSpan.style.border = `1px solid ${st.border}`;
+          card._typeSpan.textContent = plateTypeLabel(ev.plateType);
+        }
+        if (card._confSpan) card._confSpan.textContent = `${Math.round((ev.confidence || 0) * 100)}%`;
+        if (card._metaEl) {
           const videoHint = ev.videoFile
             ? `📹 ${formatHms(ev.eventTimeMs)} · ${t('offsetPrefix')} ${formatOffset(ev.videoOffsetMs)}`
             : t('noVideoHint');
-          meta.innerHTML = `<div>${formatTime(ev.eventTimeMs)}</div><div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${videoHint}</div>`;
+          card._metaEl.innerHTML = `<div>${formatTime(ev.eventTimeMs)}</div><div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${videoHint}</div>`;
+        }
+      }
 
-          info.appendChild(topRow);
-          info.appendChild(meta);
-          card.appendChild(img);
-          card.appendChild(info);
+      function createEventCardElement(ev) {
+        const card = document.createElement('div');
+        card.className = 'event-card' + (ev.id === activeEventId ? ' active' : '');
 
-          card.addEventListener('click', () => {
-            activeEventId = ev.id;
-            document.querySelectorAll('#eventList .event-card.active').forEach(el => el.classList.remove('active'));
-            card.classList.add('active');
-
-            if (ev.snapImg && fullSnapWrap && fullSnapImg) {
-              fullSnapImg.src = `/api/events/image?file=${encodeURIComponent(ev.snapImg)}`;
-              if (snapTitleEl) snapTitleEl.textContent = t('snapEventTitle', { plate: ev.plateCode || '--', time: formatTime(ev.eventTimeMs) });
-              fullSnapWrap.style.display = 'block';
-            }
-
-            if (ev.videoFile) {
-              const segIdx = segments.findIndex(s => s.name === ev.videoFile);
-              const rawSec = Math.floor((ev.videoOffsetMs || 0) / 1000);
-              const preRollSec = Math.max(0, rawSec - 2);
-              currentWallMs = Math.max(0, (ev.eventTimeMs || 0) - 2000);
-              syncSelectedDateToMs(currentWallMs);
-              if (segIdx >= 0) {
-                playSegmentAt(
-                  segIdx,
-                  preRollSec,
-                  t('seekEvent', { plate: ev.plateCode || '--', time: formatTime(ev.eventTimeMs) })
-                );
-              } else {
-                seekToWallTime(currentWallMs);
+        const img = document.createElement('img');
+        img.className = 'event-thumb';
+        img.style.cursor = 'zoom-in';
+        img.title = '点击查看大图';
+        img.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const curEv = card.__evData || ev;
+          if (!curEv.plateImg) return;
+          const src = `/api/events/image?file=${encodeURIComponent(curEv.plateImg)}`;
+          const snapAlt = curEv.snapImg
+            ? {
+                src: `/api/events/image?file=${encodeURIComponent(curEv.snapImg)}`,
+                caption: `${curEv.plateCode || '--'} · ${formatTime(curEv.eventTimeMs)} (全景)`,
+                label: '🖼 查看全景',
+                backLabel: '🚘 查看车牌图'
               }
-            } else if (nowInfoEl) {
-              nowInfoEl.textContent = t('noVideoSnapOnly', { plate: ev.plateCode || '--' });
-            }
-          });
+            : null;
+          openImageLightbox(src, `${curEv.plateCode || '--'} · ${formatTime(curEv.eventTimeMs)}`, snapAlt);
+        });
 
-          eventListEl.appendChild(card);
+        const info = document.createElement('div');
+        info.style.flex = '1';
+        info.style.minWidth = '0';
+
+        const topRow = document.createElement('div');
+        topRow.style.display = 'flex';
+        topRow.style.alignItems = 'center';
+        topRow.style.gap = '6px';
+        topRow.style.flexWrap = 'wrap';
+
+        const plateSpan = document.createElement('span');
+        plateSpan.className = 'event-plate';
+        topRow.appendChild(plateSpan);
+
+        const typeSpan = document.createElement('span');
+        typeSpan.className = 'event-badge';
+        topRow.appendChild(typeSpan);
+
+        const confSpan = document.createElement('span');
+        confSpan.style.fontSize = '11px';
+        confSpan.style.color = '#38bdf8';
+        confSpan.style.marginLeft = 'auto';
+        topRow.appendChild(confSpan);
+
+        const meta = document.createElement('div');
+        meta.className = 'event-meta';
+
+        info.appendChild(topRow);
+        info.appendChild(meta);
+        card.appendChild(img);
+        card.appendChild(info);
+
+        card._thumbImg = img;
+        card._plateSpan = plateSpan;
+        card._typeSpan = typeSpan;
+        card._confSpan = confSpan;
+        card._metaEl = meta;
+
+        card.addEventListener('click', () => {
+          const curEv = card.__evData || ev;
+          activeEventId = curEv.id;
+          document.querySelectorAll('#eventList .event-card.active').forEach(el => el.classList.remove('active'));
+          card.classList.add('active');
+
+          if (curEv.snapImg && fullSnapWrap && fullSnapImg) {
+            fullSnapImg.src = `/api/events/image?file=${encodeURIComponent(curEv.snapImg)}`;
+            if (snapTitleEl) snapTitleEl.textContent = t('snapEventTitle', { plate: curEv.plateCode || '--', time: formatTime(curEv.eventTimeMs) });
+            fullSnapWrap.style.display = 'block';
+          }
+
+          if (curEv.videoFile) {
+            const segIdx = segments.findIndex(s => s.name === curEv.videoFile);
+            const rawSec = Math.floor((curEv.videoOffsetMs || 0) / 1000);
+            const preRollSec = Math.max(0, rawSec - 2);
+            currentWallMs = Math.max(0, (curEv.eventTimeMs || 0) - 2000);
+            syncSelectedDateToMs(currentWallMs);
+            if (segIdx >= 0) {
+              playSegmentAt(
+                segIdx,
+                preRollSec,
+                t('seekEvent', { plate: curEv.plateCode || '--', time: formatTime(curEv.eventTimeMs) })
+              );
+            } else {
+              seekToWallTime(currentWallMs);
+            }
+          } else if (nowInfoEl) {
+            nowInfoEl.textContent = t('noVideoSnapOnly', { plate: curEv.plateCode || '--' });
+          }
+        });
+
+        updateEventCardElement(card, ev);
+        return card;
+      }
+
+      function reconcileEventsDom(events) {
+        if (!eventListEl) return;
+        const prevScrollTop = eventListEl.scrollTop;
+
+        if (!events || events.length === 0) {
+          if (activeEventId == null || !eventListEl.querySelector(`.event-card[data-event-id="${activeEventId}"]`)) {
+            eventListEl.innerHTML = `<div class="pb-empty-placeholder" style="color:#64748b;text-align:center;padding:28px 12px;">${t('eventsEmpty')}</div>`;
+          }
+          return;
+        }
+
+        const existingMap = new Map();
+        Array.from(eventListEl.children).forEach(child => {
+          if (child.classList && child.classList.contains('event-card') && child.dataset.eventId) {
+            existingMap.set(child.dataset.eventId, child);
+          } else {
+            eventListEl.removeChild(child);
+          }
+        });
+
+        const desiredNodes = [];
+        const desiredIds = new Set();
+        for (const ev of events) {
+          const idStr = String(ev.id);
+          desiredIds.add(idStr);
+          let card = existingMap.get(idStr);
+          if (card) {
+            updateEventCardElement(card, ev);
+            delete card.dataset.pinnedActive;
+          } else {
+            card = createEventCardElement(ev);
+          }
+          desiredNodes.push(card);
+        }
+
+        // 若用户正在回看某条记录而新数据把它挤出了当前页，则暂时固定在末尾防止凭空消失
+        if (activeEventId != null && !desiredIds.has(String(activeEventId))) {
+          const pinnedCard = existingMap.get(String(activeEventId));
+          if (pinnedCard) {
+            pinnedCard.dataset.pinnedActive = '1';
+            pinnedCard.classList.add('active');
+            desiredNodes.push(pinnedCard);
+            desiredIds.add(String(activeEventId));
+          }
+        }
+
+        for (const [idStr, card] of existingMap.entries()) {
+          if (!desiredIds.has(idStr)) {
+            eventListEl.removeChild(card);
+          }
+        }
+
+        for (let i = 0; i < desiredNodes.length; i++) {
+          const targetNode = desiredNodes[i];
+          const curAtPos = eventListEl.children[i];
+          if (curAtPos !== targetNode) {
+            eventListEl.insertBefore(targetNode, curAtPos || null);
+          }
+        }
+
+        eventListEl.scrollTop = prevScrollTop;
+      }
+
+      function renderEvents(events, opts = {}) {
+        const silent = !!opts.silent;
+        const forceRebuild = !!opts.forceRebuild;
+        lastRenderedEvents = Array.isArray(events) ? events : [];
+        if (!eventListEl) return;
+
+        if (!silent || forceRebuild) {
+          eventListEl.innerHTML = '';
+          if (!lastRenderedEvents.length) {
+            eventListEl.innerHTML = `<div class="pb-empty-placeholder" style="color:#64748b;text-align:center;padding:28px 12px;">${t('eventsEmpty')}</div>`;
+            return;
+          }
+          const frag = document.createDocumentFragment();
+          for (const ev of lastRenderedEvents) {
+            frag.appendChild(createEventCardElement(ev));
+          }
+          eventListEl.appendChild(frag);
+          if (!forceRebuild) eventListEl.scrollTop = 0;
+          return;
+        }
+
+        reconcileEventsDom(lastRenderedEvents);
+      }
+
+      function updateEventsPager(events) {
+        const pageNum = Math.floor(currentOffset / PAGE_SIZE) + 1;
+        if (pageInfoEl) pageInfoEl.textContent = t('pageInfo', { page: pageNum, count: events.length });
+        if (prevBtn) prevBtn.disabled = currentOffset <= 0;
+        if (nextBtn) nextBtn.disabled = events.length < PAGE_SIZE;
+      }
+
+      function applyPendingSilentEvents(scrollToTop) {
+        if (!pendingSilentEvents) return;
+        const evs = pendingSilentEvents;
+        pendingSilentEvents = null;
+        if (newEventsBanner) newEventsBanner.style.display = 'none';
+        renderEvents(evs, { silent: true });
+        updateEventsPager(evs);
+        if (scrollToTop && eventListEl) eventListEl.scrollTop = 0;
+      }
+
+      if (newEventsBanner) {
+        newEventsBanner.addEventListener('click', () => applyPendingSilentEvents(true));
+      }
+      if (eventListEl) {
+        eventListEl.addEventListener('scroll', () => {
+          if (pendingSilentEvents && eventListEl.scrollTop <= 8) {
+            applyPendingSilentEvents(false);
+          }
         });
       }
 
-      function loadEvents() {
+      function loadEvents(opts = {}) {
+        const silent = !!opts.silent;
         const qs = new URLSearchParams({
           q: searchInput ? searchInput.value.trim() : '',
           type: typeSelect ? typeSelect.value : '',
@@ -5594,35 +7248,57 @@
           offset: String(currentOffset)
         }).toString();
 
-        if (eventListEl) {
-          eventListEl.innerHTML = `<div style="color:#94a3b8;text-align:center;padding:24px 0;">${t('eventsLoading')}</div>`;
+        if (!silent) {
+          pendingSilentEvents = null;
+          if (newEventsBanner) newEventsBanner.style.display = 'none';
+          if (eventListEl) {
+            eventListEl.innerHTML = `<div style="color:#94a3b8;text-align:center;padding:24px 0;">${t('eventsLoading')}</div>`;
+          }
         }
 
         fetch(`/api/events?${qs}`, { credentials: 'include', cache: 'no-store' })
           .then(r => r.json())
           .then(data => {
             const events = Array.isArray(data.events) ? data.events : [];
-            renderEvents(events);
-            const pageNum = Math.floor(currentOffset / PAGE_SIZE) + 1;
-            if (pageInfoEl) pageInfoEl.textContent = t('pageInfo', { page: pageNum, count: events.length });
-            if (prevBtn) prevBtn.disabled = currentOffset <= 0;
-            if (nextBtn) nextBtn.disabled = events.length < PAGE_SIZE;
+            if (silent) {
+              if (eventsFingerprint(events) === eventsFingerprint(lastRenderedEvents)) {
+                return;
+              }
+              if (eventListEl && eventListEl.scrollTop > 40) {
+                pendingSilentEvents = events;
+                const oldIds = new Set((lastRenderedEvents || []).map(e => String(e.id)));
+                const newCount = events.filter(e => !oldIds.has(String(e.id))).length;
+                if (newEventsBanner) {
+                  newEventsBanner.textContent = newCount > 0
+                    ? `🆕 有 ${newCount} 条新过车记录 · 点击加载`
+                    : '🔄 列表有更新 · 点击加载';
+                  newEventsBanner.style.display = 'block';
+                }
+                return;
+              }
+              if (newEventsBanner) newEventsBanner.style.display = 'none';
+              renderEvents(events, { silent: true });
+              updateEventsPager(events);
+              return;
+            }
+            renderEvents(events, { silent: false });
+            updateEventsPager(events);
           })
           .catch(() => {
-            if (eventListEl) {
+            if (!silent && eventListEl) {
               eventListEl.innerHTML = `<div style="color:#f87171;text-align:center;padding:24px 0;">${t('eventsError')}</div>`;
             }
           });
       }
 
-      if (searchBtn) searchBtn.addEventListener('click', () => { currentOffset = 0; loadEvents(); });
-      if (refreshBtn) refreshBtn.addEventListener('click', () => { loadSegmentsAndTimeline(); loadEvents(); });
-      if (typeSelect) typeSelect.addEventListener('change', () => { currentOffset = 0; loadEvents(); });
+      if (searchBtn) searchBtn.addEventListener('click', () => { currentOffset = 0; loadEvents({ silent: false }); });
+      if (refreshBtn) refreshBtn.addEventListener('click', () => { loadSegmentsAndTimeline(); loadEvents({ silent: false }); });
+      if (typeSelect) typeSelect.addEventListener('change', () => { currentOffset = 0; loadEvents({ silent: false }); });
       if (searchInput) {
         searchInput.addEventListener('keydown', (e) => {
           if (e.key === 'Enter') {
             currentOffset = 0;
-            loadEvents();
+            loadEvents({ silent: false });
           }
         });
       }
@@ -5630,14 +7306,14 @@
         prevBtn.addEventListener('click', () => {
           if (currentOffset >= PAGE_SIZE) {
             currentOffset -= PAGE_SIZE;
-            loadEvents();
+            loadEvents({ silent: false });
           }
         });
       }
       if (nextBtn) {
         nextBtn.addEventListener('click', () => {
           currentOffset += PAGE_SIZE;
-          loadEvents();
+          loadEvents({ silent: false });
         });
       }
     })();

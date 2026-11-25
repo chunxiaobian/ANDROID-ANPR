@@ -132,7 +132,11 @@ class PlateEventStore private constructor(context: Context) :
         height: Int,
         rotationDegrees: Int,
         videoFile: String?,
-        videoStartMs: Long
+        videoStartMs: Long,
+        normBoxX1: Float? = null,
+        normBoxY1: Float? = null,
+        normBoxX2: Float? = null,
+        normBoxY2: Float? = null
     ) {
         val now = System.currentTimeMillis()
         val offsetMs = if (!videoFile.isNullOrBlank() && videoStartMs > 0L) {
@@ -141,10 +145,10 @@ class PlateEventStore private constructor(context: Context) :
         val rot = ((rotationDegrees % 360) + 360) % 360
         val uprightW = (if (rot == 90 || rot == 270) height else width).coerceAtLeast(1)
         val uprightH = (if (rot == 90 || rot == 270) width else height).coerceAtLeast(1)
-        val nx1 = (plate.x1 / uprightW).coerceIn(0f, 1f)
-        val ny1 = (plate.y1 / uprightH).coerceIn(0f, 1f)
-        val nx2 = (plate.x2 / uprightW).coerceIn(0f, 1f)
-        val ny2 = (plate.y2 / uprightH).coerceIn(0f, 1f)
+        val nx1 = (normBoxX1 ?: (plate.x1 / uprightW)).coerceIn(0f, 1f)
+        val ny1 = (normBoxY1 ?: (plate.y1 / uprightH)).coerceIn(0f, 1f)
+        val nx2 = (normBoxX2 ?: (plate.x2 / uprightW)).coerceIn(0f, 1f)
+        val ny2 = (normBoxY2 ?: (plate.y2 / uprightH)).coerceIn(0f, 1f)
 
         var needImages = false
         var matchedId: Long? = null

@@ -246,6 +246,7 @@ class PlateRecognizer(context: Context) {
     @Volatile var onHeadlightCaptureChanged: ((Boolean) -> Unit)? = null
     private var lastAntiOverexpAdjustMs = 0L
     @Volatile var onAntiOverexposureStep: ((Int) -> Unit)? = null
+    @Volatile var onPlateDetected: ((String, Float) -> Unit)? = null
     @Volatile var captureModeAntiOverexposureActive: Boolean = false
 
     companion object {
@@ -2565,6 +2566,7 @@ class PlateRecognizer(context: Context) {
                     latestPlateType = best.type
                     Log.i("ALPR", "识别到车牌(${detected.size}): ${best.code} type=${best.type} (${String.format("%.1f", best.confidence * 100)}%)")
                     onDetected?.invoke(best.code, best.confidence)
+                    onPlateDetected?.invoke(best.code, best.confidence)
 
                     val store = PlateEventStore.getInstance(appContext)
                     val (videoFile, videoStartMs) = videoContextProvider?.invoke() ?: (null to 0L)
@@ -2585,7 +2587,11 @@ class PlateRecognizer(context: Context) {
                             inferH,
                             rotationDegrees,
                             videoFile,
-                            videoStartMs
+                            videoStartMs,
+                            normBoxX1 = (d.x1 / rotatedW.coerceAtLeast(1)).coerceIn(0f, 1f),
+                            normBoxY1 = (d.y1 / rotatedH.coerceAtLeast(1)).coerceIn(0f, 1f),
+                            normBoxX2 = (d.x2 / rotatedW.coerceAtLeast(1)).coerceIn(0f, 1f),
+                            normBoxY2 = (d.y2 / rotatedH.coerceAtLeast(1)).coerceIn(0f, 1f)
                         )
                     }
                 }

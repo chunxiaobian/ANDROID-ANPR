@@ -132,10 +132,87 @@ class StreamingService : LifecycleService() {
             onHeadlightCaptureChanged = { active ->
                 headlightCaptureModeActive = active
                 launchMain { applyCurrentManualExposure() }
-                Log.i(TAG, if (active) "检测到局部亮度大幅变化（车灯），进入抓拍模式" else "局部高亮恢复平稳，退出抓拍模式")
+                val msg = if (active) "检测到局部亮度大幅变化（车灯），进入抓拍模式" else "局部高亮恢复平稳，退出抓拍模式"
+                Log.i(TAG, msg)
+                recordEventLog("CAPTURE", msg)
             }
             onAntiOverexposureStep = { step -> handleAntiOverexposureStep(step) }
+            onPlateDetected = { code, conf ->
+                val now = System.currentTimeMillis()
+                val shouldLog = synchronized(eventLogLock) {
+                    if (code != lastPlateLogCode || now - lastPlateLogAtMs >= 3000L) {
+                        lastPlateLogCode = code
+                        lastPlateLogAtMs = now
+                        true
+                    } else {
+                        false
+                    }
+                }
+                if (shouldLog) {
+                    recordEventLog("ALPR", "识别车牌 $code (${String.format(Locale.US, "%.1f", conf * 100)}%)")
+                }
+            }
         }
+    }
+
+    private data class EventLogEntry(
+        val seq: Long,
+        val timeMs: Long,
+        val level: String,
+        val tag: String,
+        val message: String
+    )
+    private val eventLogLock = Any()
+    private val eventLogs = kotlin.collections.ArrayDeque<EventLogEntry>(200)
+    private val eventLogSeq = java.util.concurrent.atomic.AtomicLong(0L)
+    private var lastEventLogKey: String = ""
+    private var lastEventLogAtMs: Long = 0L
+    private var lastPlateLogCode: String = ""
+    private var lastPlateLogAtMs: Long = 0L
+
+    private fun recordEventLog(tag: String, message: String, level: String = "info") {
+        val clean = message.trim()
+        if (clean.isEmpty()) return
+        val now = System.currentTimeMillis()
+        val dedupKey = "$tag|$clean"
+        synchronized(eventLogLock) {
+            if (dedupKey == lastEventLogKey && now - lastEventLogAtMs < 1000L) return
+            lastEventLogKey = dedupKey
+            lastEventLogAtMs = now
+            val seq = eventLogSeq.incrementAndGet()
+            eventLogs.addLast(EventLogEntry(seq, now, level, tag, clean))
+            while (eventLogs.size > 200) {
+                eventLogs.removeFirst()
+            }
+        }
+    }
+
+    private fun queryEventLogsJson(params: Map<String, String>): String {
+        val clear = params["clear"] == "1" || params["clear"] == "true"
+        val since = params["since"]?.toLongOrNull() ?: 0L
+        val limit = (params["limit"]?.toIntOrNull() ?: 100).coerceIn(1, 200)
+        val entries: List<EventLogEntry>
+        val latestSeq: Long
+        synchronized(eventLogLock) {
+            if (clear) eventLogs.clear()
+            latestSeq = eventLogSeq.get()
+            val filtered = if (since > 0L) eventLogs.filter { it.seq > since } else eventLogs.toList()
+            entries = if (filtered.size > limit) filtered.takeLast(limit) else filtered
+        }
+        return org.json.JSONObject().apply {
+            put("lastSeq", latestSeq)
+            put("logs", org.json.JSONArray().apply {
+                for (item in entries) {
+                    put(org.json.JSONObject().apply {
+                        put("seq", item.seq)
+                        put("timeMs", item.timeMs)
+                        put("level", item.level)
+                        put("tag", item.tag)
+                        put("message", item.message)
+                    })
+                }
+            })
+        }.toString()
     }
 
     var onClientConnected: (() -> Unit)? = null
@@ -421,7 +498,7 @@ class StreamingService : LifecycleService() {
         if (streamingServerHelper == null) {
             streamingServerHelper = StreamingServerHelper(
                 this,
-                onLog = { Log.i(TAG, "Server: $it"); onLog?.invoke(it) },
+                onLog = { Log.i(TAG, "Server: $it"); recordEventLog("SYS", it); onLog?.invoke(it) },
                 onClientConnected = { handleClientConnected() },
                 onClientDisconnected = { handleClientDisconnected() },
                 onControlCommand = { key, value, ts -> handleRemoteControl(key, value, ts) },
@@ -465,10 +542,7 @@ class StreamingService : LifecycleService() {
                             }
                         })
                         val telemetry = com.github.digitallyrefined.androidipcamera.helpers.StreamingServerHelper.readTelemetry(this@StreamingService)
-                        put("batteryPowerW", telemetry.batteryPowerW)
-                        put("batteryCharging", telemetry.batteryCharging)
-                        put("batteryTempC", telemetry.batteryTempC)
-                        put("cpuTempC", telemetry.cpuTempC)
+                        com.github.digitallyrefined.androidipcamera.helpers.StreamingServerHelper.appendTelemetryJson(this, telemetry)
                         recognizer.latestMotionDebug?.let { md ->
                             put("motionDebug", org.json.JSONObject().apply {
                                 put("hasMotion", md.hasMotion)
@@ -560,6 +634,7 @@ class StreamingService : LifecycleService() {
                     )
                     val saved = com.github.digitallyrefined.androidipcamera.helpers.PlateRecognizer.saveConfig(this, updated)
                     plateRecognizer.reloadConfig(saved)
+                    recordEventLog("ALPR", "ALPR 参数已更新 (detLevel=${saved.detLevel}, filter=${saved.vehicleFilterMode})")
                     launchMain {
                         applyCurrentManualExposure()
                     }
@@ -611,22 +686,24 @@ class StreamingService : LifecycleService() {
                     }
                     org.json.JSONObject().apply { put("ok", ok) }.toString()
                 },
+                onEventLogsQuery = { params -> queryEventLogsJson(params) },
                 isCameraActive = { captureRunning }
             )
             com.github.digitallyrefined.androidipcamera.helpers.PlateRecognizer.videoContextProvider = {
                 localRecorder?.let { it.currentFileName to it.recordingStartTimeMs } ?: (null to 0L)
             }
             // Initialize encoders with the streaming server helper
-            videoStreamingEncoder = VideoStreamingEncoder(this, streamingServerHelper!!) { Log.i(TAG, "H264: $it"); onLog?.invoke(it) }
-            mjpegStreamingEncoder = MjpegStreamingEncoder(this, streamingServerHelper!!) { Log.i(TAG, "MJPEG: $it"); onLog?.invoke(it) }
+            videoStreamingEncoder = VideoStreamingEncoder(this, streamingServerHelper!!) { Log.i(TAG, "H264: $it"); recordEventLog("SYS", "H264: $it"); onLog?.invoke(it) }
+            mjpegStreamingEncoder = MjpegStreamingEncoder(this, streamingServerHelper!!) { Log.i(TAG, "MJPEG: $it"); recordEventLog("SYS", "MJPEG: $it"); onLog?.invoke(it) }
             motionMonitor = MotionMonitor(this) { active ->
                 Log.i(TAG, "Motion ${if (active) "started" else "ended"}")
+                recordEventLog("MOTION", if (active) "ONVIF 移动侦测触发" else "ONVIF 移动侦测结束")
                 onvifServer?.setMotion(active)
             }
             rtspServer = RtspServer(
                 AndroidRtspHost(
                     this,
-                    onLog = { Log.i(TAG, "RTSP: $it"); onLog?.invoke(it) },
+                    onLog = { Log.i(TAG, "RTSP: $it"); recordEventLog("SYS", "RTSP: $it"); onLog?.invoke(it) },
                     clientConnected = { handleClientConnected() },
                     clientDisconnected = { handleClientDisconnected() },
                     keyFrameRequest = { stream ->
@@ -707,7 +784,7 @@ class StreamingService : LifecycleService() {
             // Snapshots use the regular still-capture path, so they work whether or not a
             // stream is running (a snapshot opens the camera on demand and restores the stream).
             snapshot = { snapshot(camId()) },
-            onLog = { Log.i(TAG, "ONVIF: $it"); onLog?.invoke("ONVIF: $it") },
+            onLog = { Log.i(TAG, "ONVIF: $it"); recordEventLog("SYS", "ONVIF: $it"); onLog?.invoke("ONVIF: $it") },
             // Same certificate as the web server; null when TLS is disabled.
             tls = { TlsHelper.serverConfig(this) },
             bindAddress = ListenInterface.resolve(this)
@@ -729,6 +806,7 @@ class StreamingService : LifecycleService() {
                 motionMonitor?.detector?.let { if (it.active) onvif.setMotion(true) }
             } catch (e: Exception) {
                 Log.e(TAG, "ONVIF start failed", e)
+                recordEventLog("SYS", "ONVIF 启动失败: ${e.message}", level = "error")
                 onLog?.invoke("ONVIF failed to start: ${e.message}")
                 try { multicastLock?.takeIf { it.isHeld }?.release() } catch (_: Exception) {}
                 multicastLock = null
@@ -1149,6 +1227,7 @@ class StreamingService : LifecycleService() {
         }
         backend = cap
         Log.i(TAG, "stream ${camId()} api=camera1 ${cap.chosenW}x${cap.chosenH}")
+        recordEventLog("CAM", "相机启动 [Camera1] id=${camId()} ${cap.chosenW}x${cap.chosenH}")
     }
 
     private fun startCameraXBackend(want: Size) {
@@ -1225,6 +1304,7 @@ class StreamingService : LifecycleService() {
             h264SurfaceProvider,
             onEncoderSurfaceFallback = {
                 Log.i(TAG, "CameraX SurfaceProvider fallback triggered: switching H.264 to software YUV mode")
+                recordEventLog("CAM", "CameraX 硬件表面不可用，回退至软件 YUV 编码", level = "warn")
                 h264?.setEncoder(null)
             },
             sharedPlateRecognizer = plateRecognizer
@@ -1252,6 +1332,7 @@ class StreamingService : LifecycleService() {
             }
         }.also { it.start() }
         Log.i(TAG, "stream ${camId()} api=camerax")
+        recordEventLog("CAM", "相机启动 [CameraX] id=${camId()} ${want.width}x${want.height}")
     }
 
     private fun stopCamera() {
@@ -1460,7 +1541,14 @@ class StreamingService : LifecycleService() {
                 (!captureModeEntered && target.currentExposureTimeNs in 1L..4_000_000L)
             )
         val activeCapture = wantCapture && !fastShutterSkip
+        val prevCapture = captureModeEntered
         captureModeEntered = activeCapture
+        if (activeCapture != prevCapture) {
+            recordEventLog(
+                "CAPTURE",
+                if (activeCapture) "进入抓拍曝光模式 (${cfg.flashCaptureMode})" else "退出抓拍曝光模式"
+            )
+        }
 
         if (activeCapture) {
             when (cfg.flashCaptureMode) {
@@ -1534,6 +1622,7 @@ class StreamingService : LifecycleService() {
                 if (antiOverexposureOffset != 0) {
                     antiOverexposureOffset = 0
                     target.setExposure(baseEv.coerceIn(lo, hi))
+                    recordEventLog("CAPTURE", "防过曝 EV 复位为基准值 ($baseEv)")
                 }
                 return@launchMain
             }
@@ -1543,7 +1632,9 @@ class StreamingService : LifecycleService() {
             }
             if (nextOffset != antiOverexposureOffset) {
                 antiOverexposureOffset = nextOffset
-                target.setExposure((baseEv + antiOverexposureOffset).coerceIn(lo, hi))
+                val targetEv = (baseEv + antiOverexposureOffset).coerceIn(lo, hi)
+                target.setExposure(targetEv)
+                recordEventLog("CAPTURE", "峰值防过曝 EV 调整 -> $targetEv (偏移 $antiOverexposureOffset)")
             }
         }
     }
@@ -1578,6 +1669,7 @@ class StreamingService : LifecycleService() {
                     if (backend?.hasFlashUnit != true) setDeviceTorch(true)
                     applyCurrentManualExposure(torchLitOverride = true)
                     Log.i(TAG, "检测到运动，自动开启闪光灯")
+                    recordEventLog("TORCH", "检测到运动/车辆，自动开启闪光灯")
                 }
             } else if (motionTorchLitByAuto) {
                 motionTorchLitByAuto = false
@@ -1587,6 +1679,7 @@ class StreamingService : LifecycleService() {
                     setDeviceTorch(false)
                     applyCurrentManualExposure(torchLitOverride = false)
                     Log.i(TAG, "画面恢复静止，自动关闭闪光灯")
+                    recordEventLog("TORCH", "画面恢复静止，自动关闭闪光灯")
                 }
             }
         }
@@ -1988,12 +2081,14 @@ class StreamingService : LifecycleService() {
                 }
                 prefs.edit().putString("video_codec", codec).apply()
                 Log.i(TAG, "video_codec=$codec; reconfiguring camera")
+                recordEventLog("CAM", "切换视频编码为 ${codec.uppercase(Locale.US)}")
                 launchMain { if (captureRunning) startCamera(force = true) }
             }
             "allow_limited_surface" -> {
                 val allow = value.equals("true", ignoreCase = true) || value == "1"
                 prefs.edit().putBoolean("allow_limited_surface", allow).apply()
                 Log.i(TAG, "allow_limited_surface=$allow; reconfiguring camera")
+                recordEventLog("CAM", "LIMITED GPU 直出设置为 ${if (allow) "开启" else "关闭"}")
                 launchMain { if (captureRunning) startCamera(force = true) }
             }
             "zoom" -> {
@@ -2296,6 +2391,7 @@ class StreamingService : LifecycleService() {
         if (loopRecordingJob?.isActive == true) return
         loopRecordingJob = lifecycleScope.launch(Dispatchers.IO) {
             Log.i(TAG, "Loop recording started (segment=${loopSegmentMinutes()}m, max=${loopMaxStorageGb()}GB)")
+            recordEventLog("REC", "24h 循环录像启动 (分段=${loopSegmentMinutes()}m, 上限=${loopMaxStorageGb()}GB)")
             pruneOldRecordings()
             while (isActive && isLoopRecordingEnabled()) {
                 if (localRecorder?.isRecording != true) {
@@ -2326,6 +2422,7 @@ class StreamingService : LifecycleService() {
             }
         }
         Log.i(TAG, "Loop recording stopped")
+        recordEventLog("REC", "24h 循环录像已停止")
     }
 
     private fun rotateRecordingSegment() {
@@ -2340,6 +2437,7 @@ class StreamingService : LifecycleService() {
                 localRecorder = newRecorder
                 oldRecorder.stop()
                 Log.i(TAG, "Rotated recording segment -> ${newRecorder.currentFileName}")
+                recordEventLog("REC", "录像分段切换 -> ${newRecorder.currentFileName}")
             } catch (e: Exception) {
                 Log.e(TAG, "rotateRecordingSegment failed: ${e.message}")
             }
@@ -2366,6 +2464,7 @@ class StreamingService : LifecycleService() {
                     freeBytes += file.sizeBytes
                     com.github.digitallyrefined.androidipcamera.helpers.PlateEventStore.getInstance(this).deleteEventsForVideo(file.name)
                     Log.i(TAG, "Loop prune deleted old segment: ${file.name} (${file.sizeBytes / 1024}KB)")
+                    recordEventLog("REC", "容量清理旧分段: ${file.name} (${file.sizeBytes / 1024}KB)")
                 }
             }
         } catch (e: Exception) {
